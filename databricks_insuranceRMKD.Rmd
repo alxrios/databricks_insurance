@@ -1,0 +1,51 @@
+---
+title: "Databricks insurance"
+output: html_document
+---
+
+<center><img src="https://i.imgur.com/dDVDTeP.jpeg">
+</center>
+
+```{r, out.width = "400px"}
+knitr::include_graphics("https://i.imgur.com/dDVDTeP.jpeg")
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### **MAIN OBJECTIVE**
+
+In this notebook we're going to explore a car insurance dataset with the objective of explore the usefulness of some machine learning algorithms in the aid of fraud detection.
+
+### **NECESSARY LIBRARIES**
+
+Those are the libraries that are necessary to execute all the codes in this notebook.
+
+```{r}
+library(jsonlite)
+library(ggplot2)
+```
+
+### **DATA LOAD**
+
+For this notebook, we're going to merge two datasets obtained from the Databricks' Github repository.
+
+```{r}
+policies <- read.csv("https://raw.githubusercontent.com/databricks-industry-solutions/dlt-insurance-claims/refs/heads/main/data/samples/mysql/policies.csv")
+claims <- fromJSON("https://raw.githubusercontent.com/databricks-industry-solutions/dlt-insurance-claims/refs/heads/main/data/samples/mongodb/claims.json")
+dim(policies)
+dim(claims)
+
+```
+We have that the dataset "policies" contain 227484 rows and 20 columns, while the dataset "claims" has 50642 rows and 10 columns. Let's see if they can have variables in common.
+```{r}
+names(policies)
+names(claims)
+```
+Exploring the variable names, we can see that they can have in common the variables "POLICY_NO" from the dataset policies and the variable "policy_no" from the dataset claims. Let's check if they have observations in common in this variables.
+```{r}
+length(unique(claims$policy_no))
+length(unique(policies$POLICY_NO))
+```
+The number of unique values is lesser in the variable from the dataset claims than the one in the dataset policies, so we are going to have has much as 45343 observations that can be matched in both datasets.
