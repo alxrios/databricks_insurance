@@ -1,12 +1,12 @@
 ---
-title: "Databricks insurance"
-output: html_document
+title: "**DATABRICKS INSURANCE**"
+output:
+   html_document:
+    toc: yes
 ---
 
-<center><img src="https://i.imgur.com/dDVDTeP.jpeg">
-</center>
 
-```{r, out.width = "400px"}
+```{r, out.width = "600px", echo = FALSE}
 knitr::include_graphics("https://i.imgur.com/dDVDTeP.jpeg")
 ```
 
@@ -14,11 +14,11 @@ knitr::include_graphics("https://i.imgur.com/dDVDTeP.jpeg")
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-### **MAIN OBJECTIVE**
+### **1 Main objective**
 
 In this notebook we're going to explore a car insurance dataset with the objective of explore the usefulness of some machine learning algorithms in the aid of fraud detection.
 
-### **NECESSARY LIBRARIES**
+### **2 Necessary libraries**
 
 Those are the libraries that are necessary to execute all the codes in this notebook.
 
@@ -27,16 +27,18 @@ library(jsonlite)
 library(ggplot2)
 ```
 
-### **DATA LOAD**
+### **3 Data load**
 
 For this notebook, we're going to merge two datasets obtained from the Databricks' Github repository.
 
 ```{r}
 policies <- read.csv("https://raw.githubusercontent.com/databricks-industry-solutions/dlt-insurance-claims/refs/heads/main/data/samples/mysql/policies.csv")
 claims <- fromJSON("https://raw.githubusercontent.com/databricks-industry-solutions/dlt-insurance-claims/refs/heads/main/data/samples/mongodb/claims.json")
+```
+### **4 Data exploration**
+```{r}
 dim(policies)
 dim(claims)
-
 ```
 We have that the dataset "policies" contain 227484 rows and 20 columns, while the dataset "claims" has 50642 rows and 10 columns. Let's see if they can have variables in common.
 ```{r}
@@ -48,4 +50,129 @@ Exploring the variable names, we can see that they can have in common the variab
 length(unique(claims$policy_no))
 length(unique(policies$POLICY_NO))
 ```
-The number of unique values is lesser in the variable from the dataset claims than the one in the dataset policies, so we are going to have has much as 45343 observations that can be matched in both datasets.
+The number of unique values in the dataset claims is of 45343, so we have 5299 policy numbers that are repeated. Meanwhile in the dataset policies we have 227463 unique values, so there 21 observations are repeated. 
+
+Let's now test if the observations with the same policy numbers in the dataset claims have also the same values for the other variables.
+```{r}
+head(sort(table(claims$policy_no), decreasing = T))
+```
+Let's use the policy number 102122085 for the test, since it's the one that appears more times in the dataset.
+```{r}
+claims[which(claims$policy_no == "102122085"), ]
+```
+As can be seen the values aren't constant for all the columns through the five rows with repeated policy numbers.
+
+Let's explore the case of the dataset policies now.
+```{r}
+head(sort(table(policies$POLICY_NO), decreasing = TRUE), 9)
+```
+15 observations don't have any policy number associated. Let's check the values the other columns take for this observations.
+```{r}
+policies[which(policies$POLICY_NO == ""), ]
+```
+Many columns are empty or take the value NA, so we're going to omit these observations before merging both datasets.
+
+Since then only 7 repeated policies remain, this time let's observe visually if these seven policies cotain the same values for each observation.
+```{r}
+# Let's store the seven policy numbers in a variable
+duplicated_policies <- names(head(sort(table(policies$POLICY_NO), decreasing = TRUE), 8)[-1])
+
+na_to_char <- function(input_vector) {
+  # This function recieves a row of a data.frame object and if it contains NA values, it returns
+  # the same vector with the NA's also as characters.
+  # Input by the user is assumed to be correct.
+  if (length(input_vector[which(is.na(input_vector))]) > 0) {
+    input_vector[which(is.na(input_vector))] <- "NA"
+  }
+  return(input_vector)
+}
+
+checkDiscrepancies <- function(p_numbers) {
+  # Input: p_numbers, a character vector with the policy numbers to check.
+  # If both rows don't have the same values for each column, a data.frame object
+  # with the content of the columns that doesn't match is printed in the console.
+  
+  for (i in p_numbers) {
+    check <- policies[which(policies$POLICY_NO == i), ]
+    check[1, ] <- na_to_char(check[1, ])
+    check[2, ] <- na_to_char(check[2, ])
+    discrepancies <- which(check[1, ] != check[2, ])
+    if (length(discrepancies) > 0) {
+      cat("Discrepancies for the policy number ", i, " between the two rows found at the variables:\n")
+      print("---------------------------------------------------------------------------------------")
+      auxiliar_frame <- data.frame(variable_name = colnames(check[discrepancies]), 
+                                   row_one_values = unlist(check[1, discrepancies]), 
+                                   row_two_values = unlist(check[2, discrepancies]))
+      rownames(auxiliar_frame) <- NULL
+      print(auxiliar_frame)
+      print("---------------------------------------------------------------------------------------")
+    } else {
+      cat("No discrepancies were found for the policy with the number: ", i)
+    }
+  }
+}
+
+checkDiscrepancies(duplicated_policies)
+```
+
+So for simplicity let's remove all the observations with repeated policy numbers before merging both datasets.
+
+Let's store first the policy numbers with repetitions
+```{r}
+duplicated_pol_claims <- sort(table(claims$policy_no), decreasing = T)
+length(duplicated_pol_claims[which(duplicated_pol_claims > 1)])
+```
+So 4928 observations should be removed from this dataset.
+```{r}
+duplicated_pol_claims <- duplicated_pol_claims[which(duplicated_pol_claims > 1)]
+duplicated_pol_claims <- names(duplicated_pol_claims)
+```
+We need to store the row indexes of the observations to drop from the dataset.
+```{r}
+drop_index <- numeric()
+for (i in duplicated_pol_claims) {
+  drop_index <- c(drop_index, which(claims$policy_no == i))
+}
+```
+Let's add also the duplicated ones in the dataset policies.
+```{r}
+for (i in duplicated_policies) {
+  drop_index <- c(drop_index, which(claims$policy_no == i))
+}
+```
+Which length will have the resulting dataset after the merge without duplicated policies?
+```{r}
+future_length <- 0
+for (i in claims[-drop_index, "policy_no"]) {
+  check <- which(policies$POLICY_NO == i)
+  if (length(check)) {
+    future_length <- future_length + 1
+  }
+}
+
+print(future_length)
+```
+So the resulting dataset will have 40412 rows.
+Let's proceed now with the merge.`
+```{r}
+insurance <- merge(claims[-drop_index, ], policies, by.x = c("policy_no"), 
+                    by.y = c("POLICY_NO"), all.x = T)
+```
+Let's check if we have the predicted length for the rows
+```{r}
+dim(insurance)
+```
+It looks that there are two extra rows, let's explore if this is caused because of observations
+with NA values.
+```{r}
+which(is.na(insurance$policy_no))
+```
+Yes, there are two observations with NA as their policy number.
+```{r}
+print(insurance[which(is.na(insurance$policy_no)), ])
+```
+Since there are NA values in the majority of the columns for this observations, let's just delete
+them form the dataset.
+```{r}
+insurance <- insurance[-which(is.na(insurance$policy_no)), ]
+```
