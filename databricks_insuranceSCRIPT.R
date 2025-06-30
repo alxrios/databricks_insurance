@@ -8,6 +8,7 @@
 library(ggplot2)
 library(jsonlite)
 library(data.table)
+library(lubridate)
 
 # Data load
 policies <- read.csv("https://raw.githubusercontent.com/databricks-industry-solutions/dlt-insurance-claims/refs/heads/main/data/samples/mysql/policies.csv")
@@ -225,57 +226,149 @@ insurance <- insurance[-which(is.na(insurance$policy_no)), ]
 
 # Let's now explore each variable:
 
+dim(insurance)[2]
+names(insurance)
+
+# 1 variable: policy_no
+
+head(insurance$policy_no)
+length(unique(insurance$policy_no))
+
+# 2 variable: claim_no
+
+head(insurance$claim_no)
+length(unique(insurance$claim_no))
+
+# 3 variable: claim_datetime
+
+head(insurance$claim_datetime)
+typeof(insurance$claim_datetime)
+
+# This time we have a variable that contains dates in character format, so let's search 
+# for a more appropriate data type for them.
+# library(lubridate)
+as_datetime(insurance$claim_datetime[1])
+test <- as_datetime(insurance$claim_datetime[1])
+day(test)
+month(test)
+year(test)
+hour(test)
+minutes(test)
+seconds(test)
+
+# First let's convert from character to a date-time object.
+insurance$claim_datetime <- as_datetime(insurance$claim_datetime)
+# And now let's store the date in one variable and the hour of the claim in another.
+# Also let's store the week day associated to the claim so it could be of any help after.
+insurance$claim_date <- as_date(insurance$claim_datetime)
+insurance$claim_hour <- hour(insurance$claim_datetime)
+insurance$claim_wday <- wday(insurance$claim_datetime, week_start = 1)
+# We use the week_start option so Monday appear as the first day of week
+
+range(insurance$claim_date)
+length(unique(insurance$claim_date))
+# The range of dates of the observations goes from february of 2015 to the last day of 2020.
+# There are only 1633 different dates for the 40412 observations in the dataset.
+# Let's observe if all the years are represented equally.
+barplot(table(year(insurance$claim_date)))
+
+# Let's create an auxiliar data.frame for using it with the ggplot function
+
+plot_frame <- data.frame(year = sort(unique(year(insurance$claim_date))))
+plot_frame$frequencies <- unname(table(year(insurance$claim_date)))
+
+ggplot(data = plot_frame, aes(x = year, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Observations for each year")
+
+# As can be seen there are observations from 2015 to 2020. The years with more registered 
+# cases are 2016 and 2017 which accumulate the 35% and the 26% of the observations respectivelly.
+
+sort(unique(insurance$claim_hour))
+length(unique(insurance$claim_hour))
+
+# There aren't observations for every hour, specifically the hours 24, 2 and 3 are lacking without
+# any observation. --Maybe the cause could be the scarcity of traffic in the streets at these hours.--
+# Note: They're claim hours, not accident hours.
+
+sort(table(insurance$claim_hour))
+
+plot_frame <- data.frame(hour = names(table(insurance$claim_hour)))
+plot_frame$rel_freqs <- as.vector(round(100*table(insurance$claim_hour)/length(insurance$claim_hour), 3))
+
+ggplot(data = plot_frame, aes(x = hour, y = rel_freqs)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative frequencies for each hour")
+
+# Let's try to repeat the plot with the hours sorted
+
+table(insurance$claim_hour)
+plot_frame <- data.frame(hour = names(table(insurance$claim_hour)))
+plot_frame$rel_freqs <- as.vector(round(100*table(insurance$claim_hour)/length(insurance$claim_hour), 3))
+plot_frame$hour <- as.numeric(plot_frame$hour)
+
+ggplot(data = plot_frame, aes(x = hour, y = rel_freqs)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative frequencies for each hour")
+
+# There observations concentrate in the interval from the 8 a.m. to the 7 p.m.
+# It looks that this coincides with the usual commercial hours. So maybe the majority 
+# of people waits to put the claim in these hours and also the majority of incidets occur
+# durying day time.
+
+table(insurance$claim_wday)
+round(100*table(insurance$claim_wday)/length(insurance$claim_wday), 3)
+
+# There are observations for each week day.
+
+plot_frame <- data.frame(day = 1:7)
+plot_frame$rel_freqs <- as.vector(round(100*table(insurance$claim_wday)/length(insurance$claim_wday), 3))
 
 
+ggplot(data = plot_frame, aes(x = day, y = rel_freqs)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative frequencies for each week day")
 
+# Surprisingly the day with the most claims registered is the Sunday with the 18.660% of them.
+# The days with lesser claims are Friday and Saturday.
 
+# 4 variable: incident
 
+head(insurance$incident)
 
+# We can see that this variable contains four variables, so let's add each one as a new column
+# to the dataset insurance.
 
+head(insurance$incident$date)
 
+insurance$incident_date <- insurance$incident$date
+insurance$incident_hour <- insurance$incident$hour
+insurance$incident_type <- insurance$incident$type
+insurance$incident_severity <- insurance$incident$severity
 
+# 4.1 variable: incident_date
 
+# Since this variable contains dates, let's change its format.
+insurance$incident_date <- as_date(insurance$incident_date, format = "%d-%m-%Y")
+range(insurance$incident_date)
+# We can see that the range of the incidents don't coincide with the one of the claims.
 
+plot_frame <- data.frame(year = names(table(year(insurance$incident_date))), 
+                         frequencies = as.vector(unname(table(year(insurance$incident_date)))))
 
+ggplot(data = plot_frame, aes(x = year, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incidents registered for each year")
 
+# 2016 is again the year with more observations. But this time we have registered incidents
+# as older as 2010, while older claims were of 2015. Let's explore the years of the claims
+# obtained for the incidents older than 2015.
+#
+# Note: also obtain how many claims were put the same year of the incident. 
+#       There are claims put before the incident date?
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# For the data to be correct is reasonable that incident claims should be older in time or 
+# as much to register the same date of the claim. So let's check this assumed property.
 
 
 
