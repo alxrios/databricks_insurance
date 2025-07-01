@@ -368,7 +368,166 @@ ggplot(data = plot_frame, aes(x = year, y = frequencies)) +
 #       There are claims put before the incident date?
 
 # For the data to be correct is reasonable that incident claims should be older in time or 
-# as much to register the same date of the claim. So let's check this assumed property.
+# as much to be registered on the same date of the claim. So let's check this assumed property.
+
+subset_incidents <- insurance[which(year(insurance$incident_date) < 2015), c("claim_date", "incident_date")]
+dim(subset_incidents)
+head(subset_incidents)
+
+# Let's plot the claim's years for this subset.
+
+plot_frame <- data.frame(year = as.numeric(names(table(year(subset_incidents$claim_date)))))
+plot_frame$frequencies <- as.vector(table(year(subset_incidents$claim_date)))
+
+ggplot(data = plot_frame, aes(x = year, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Claim year for incidents registered before 2015")
+
+# The majority of claims are registered in 2015. Some rare cases are registered as far as 2020.
+
+# Let's check now if all the claims were put after or the same day of the incident, since to have
+# incidents registered after the claim date will not be reasonable and will indicate some kind
+# problem with the data.
+
+dates_check_frame <- insurance[, c("claim_date", "incident_date")]
+dates_check_frame$differenceDays <- dates_check_frame$claim_date - dates_check_frame$incident_date
+range(dates_check_frame$differenceDays)
+length(which(dates_check_frame$differenceDays < 0))
+# 5456 incident dates are older than the claims
+hist(dates_check_frame$differenceDays)
+
+ggplot(dates_check_frame, aes(x = as.numeric(differenceDays))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between claim and incident dates")
+
+# Histogram for the observations with a less than zero difference.
+ggplot(dates_check_frame[which(dates_check_frame$differenceDays < 0), ], aes(x = as.numeric(differenceDays))) +
+  geom_histogram(color="darkblue", fill="lightblue", bins = 15) + xlab("days") +
+  ggtitle("Days of difference between claim and incident dates")
+
+summary(dates_check_frame$differenceDays[which(dates_check_frame$differenceDays < 0)])
+
+# It's not possible to have claims put before the incident occurred, so let's reclassify this 
+# dates as NA values.
+
+insurance$claim_date[which(dates_check_frame$differenceDays < 0)] <- NA
+insurance$incident_date[which(dates_check_frame$differenceDays < 0)] <- NA
+
+# Let's check again the differences to ensure any negative difference remain.
+dates_check_frame <- insurance[, c("claim_date", "incident_date")]
+dates_check_frame$differenceDays <- dates_check_frame$claim_date - dates_check_frame$incident_date
+range(dates_check_frame$differenceDays, na.rm = T)
+# Ok, now there aren't negative differences.
+
+# Now let's add a new variable to the dataset insurance to store the differences between the claim
+# date and the incident date, now without the observations that resulted in neggative quantities
+# of days.
+
+# difference between claim date and incident date in days
+insurance$diff_ci_days <- insurance$claim_date - insurance$incident_date
+range(insurance$diff_ci_days, na.rm = T)
+
+# Histogram for the differences between the claim date and the incident date.
+ggplot(insurance[which(!is.na(insurance$diff_ci_days)), ], aes(x = as.numeric(diff_ci_days))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between claim and incident dates")
+
+summary(insurance$diff_ci_days)
+head(sort(table(insurance$diff_ci_days), decreasing = T), 10)
+
+# Barplot of the incident years
+
+plot_frame <- data.frame(year = names(table(year(insurance$incident_date))))
+plot_frame$frequencies <- as.vector(table(year(insurance$incident_date)))
+
+ggplot(data = plot_frame, aes(x = year, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incident years")
+
+
+# As we did with the claim dates, let's store the day of week in which the incident was produced.
+# Maybe some days are choose more than others to fake incidents.
+insurance$incident_wday <- wday(insurance$incident_date, week_start = 1)
+
+plot_frame <- data.frame(day = names(table(insurance$incident_wday)))
+plot_frame$rel_freq <- as.vector(100*round(table(insurance$incident_wday)/length(insurance$incident_wday), 3))
+
+ggplot(data = plot_frame, aes(x = day, y = rel_freq)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative frequencies for each week day.")
+
+# As in the case of the claims, Friday and Saturday appear as the days with less incidents, 
+# and sundays as the day with more.
+
+# 4.2 incident_hour
+
+length(which(is.na(insurance$incident_hour)))
+table(insurance$incident_hour)
+
+plot_frame <- data.frame(hour = 0:23)
+plot_frame$frequencies <- unname(table(insurance$incident_hour))
+plot_frame$rel_freq <- as.vector(round(100*table(insurance$incident_hour)/length(insurance$incident_hour), 2))
+
+ggplot(data = plot_frame, aes(x = hour, y = rel_freq)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative frequencies for incident hour.")
+
+
+sort(round(100*table(insurance$incident_hour)/length(insurance$incident_hour), 2), decreasing = T)
+
+# Checking the weekdays for the incidents happended at 12:am, 3 a.m. and 23 p.m.
+subset_incidents <- numeric()
+for (i in c(3, 0, 23)) {
+  subset_incidents <- c(subset_incidents, which(insurance$incident_hour == i))
+}
+
+# Let's check the subset it's the corrrect
+unique(insurance$incident_hour[subset_incidents])
+
+plot_frame <- data.frame(day = names(table(insurance$incident_wday[subset_incidents])))
+plot_frame$frequencies <- as.vector(table(insurance$incident_wday[subset_incidents]))
+
+ggplot(data = plot_frame, aes(x = day, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Day of week frequenciess for incidents occurred at 3 a.m.,\n 12 a.m. or 23 p.m.")
+
+# The distribution of days looks the same like the one for the whole set of hours.
+
+# 4.3 incident_type
+
+length(which(is.na(insurance$incident_type)))
+# No NA's
+unique(insurance$incident_type)
+
+# Let's convert the variable into a factor.
+insurance$incident_type <- factor(insurance$incident_type)
+
+plot_frame <- data.frame(type = names(table(insurance$incident_type)))
+plot_frame$frequencies <- as.vector(table(insurance$incident_type))
+
+bar_labels <- as.vector(as.character(round(100*table(insurance$incident_type)/length(insurance$incident_type), 2)))
+bar_labels <- paste(bar_labels, "%", sep = "")
+
+ggplot(data = plot_frame, aes(x = type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incident type frequencies.") + geom_text(aes(label = test_labels), vjust = 1.3)
+
+
+
+ggplot(data = plot_frame, aes(x = type, y = frequencies), label = scales::percent(bar_labels)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incident type frequencies.")
+
+plot_frame$bar_labels <- as.vector(as.character(round(100*table(insurance$incident_type)/length(insurance$incident_type), 2)))
+
+ggplot(data = plot_frame, aes(x = type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incident type frequencies.") +
+  geom_text(aes(label = scales::percent(bar_labels, scale = 1)), vjust = 1.3)
+
+
+
+
 
 
 
