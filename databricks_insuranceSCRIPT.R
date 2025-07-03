@@ -518,12 +518,181 @@ ggplot(data = plot_frame, aes(x = type, y = frequencies), label = scales::percen
   geom_bar(stat="identity", color = "blue", fill = "white") +
   ggtitle("Incident type frequencies.")
 
-plot_frame$bar_labels <- as.vector(as.character(round(100*table(insurance$incident_type)/length(insurance$incident_type), 2)))
+plot_frame$bar_labels <- as.vector(round(100*table(insurance$incident_type)/length(insurance$incident_type), 2))
 
 ggplot(data = plot_frame, aes(x = type, y = frequencies)) +
   geom_bar(stat="identity", color = "blue", fill = "white") +
   ggtitle("Incident type frequencies.") +
-  geom_text(aes(label = scales::percent(bar_labels, scale = 1)), vjust = 1.3)
+  geom_text(aes(label = scales::percent(bar_labels, scale = 1)), vjust = 1.4)
+
+# Are vehicle theft incident types more prevalent during night hours? Let's take a look.
+
+frequencies <- table(insurance$incident_hour[which(insurance$incident_type == "Vehicle Theft")])
+plot_frame <- data.frame(hour = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = hour, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incidents hours for the vehicle thefts.")
+
+sort(round(100*frequencies/sum(frequencies), 3), decreasing = T)
+
+frequencies <- sort(round(100*frequencies/sum(frequencies), 3), decreasing = T)
+
+plot_frame <- data.frame(hour = as.numeric(names(frequencies)))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = hour, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incidents hours for the vehicle thefts.")
+
+
+# It seems that more thefts are registered at 12 a.m., 3 a.m., 23 p.m. and 17 p.m.
+
+# 4.3 incident_severity
+
+length(which(is.na(insurance$incident_severity)))
+# No NA's.
+
+unique(insurance$incident_severity)
+# Only four different values. This variable it's an ordered categorical, so let's change its type
+# to an ordered factor.
+
+test <- sample(insurance$incident_severity, 100)
+test <- factor(test, levels = c("Trivial Damage", "Minor Damage", "Major Damage", "Total Loss"), 
+               ordered = T)
+
+insurance$incident_severity <- factor(insurance$incident_severity, 
+                                      levels = c("Trivial Damage", "Minor Damage", 
+                                                 "Major Damage", "Total Loss"), 
+                                      ordered = T)
+
+
+frequencies <- round(100*table(insurance$incident_severity)/dim(insurance)[1], 2)
+plot_frame <- data.frame(severity = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = severity, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Severity of the incident frequencies.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4)
+
+
+# 5 collision
+
+head(insurance$collision)
+insurance$collision_type <- insurance$collision$type
+insurance$vehicles_involved <- insurance$collision$number_of_vehicles_involved
+
+# 5.1 collision_type
+
+length(which(is.na(insurance$collision_type)))
+unique(insurance$collision_type)
+insurance$collision_type <- factor(insurance$collision_type)
+
+frequencies <- round(100*table(insurance$collision_type)/dim(insurance)[1], 2)
+plot_frame <- data.frame(collision_type = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = collision_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of the types of collision.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4)
+
+# We could treat NAs as unknowns?
+
+# Let's inspect the distribution of incident types for the observations with collision type
+# classified as NA.
+
+subset_incidents <- insurance$incident_type[which(is.na(insurance$collision_type))]
+frequencies <- round(100*table(subset_incidents)/length(subset_incidents), 2)
+plot_frame <- data.frame(incident_type = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = incident_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incident type frequencies for the observations with collision type missing.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4)
+
+# Looks pretty similar to the distribution of the rest of the observations.
+# In this case it could make sense to think that the missing observations are not just missing, 
+# but also cases were the collision it's just unkown, like in a case of vandalism were the car 
+# was parked in the street or a heavy impact in which the car is so damaged that it's impossible to
+# know the side of the collision or because it was heavy impacted in several ways. So this time, 
+# let's try to put all the missing observations into a new category that will be named as 'unknown'.
+
+test <- insurance$collision$type
+unique(test)
+head(addNA(test))
+unique(replace(test, which(is.na(test)), 'unknown'))
+test2 <- addNA(test)
+unique(test2)
+length(which(is.na(test2)))
+
+# Let's add again the content into a new column.
+insurance$collision_type <- insurance$collision$type
+insurance$collision_type <- replace(insurance$collision_type, which(is.na(insurance$collision_type)), "unknown")
+insurance$collision_type <- factor(insurance$collision_type)
+head(insurance$collision_type)
+
+frequencies <- round(100*table(insurance$collision_type)/dim(insurance)[1], 2)
+plot_frame <- data.frame(collision_type = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = collision_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of the types of collision.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4) 
+
+# 5.2 vehicles_involved
+
+head(insurance$vehicles_involved)
+length(which(is.na(insurance$vehicles_involved)))
+unique(insurance$vehicles_involved)
+round(100*table(insurance$vehicles_involved)/length(insurance$vehicles_involved), 2)
+scales::percent(as.vector(table(insurance$vehicles_involved)/length(insurance$vehicles_involved)))
+vehicles_table <- paste(round(100*table(insurance$vehicles_involved)/length(insurance$vehicles_involved), 2), "%", sep = "")
+colnames(vehicles_table) <- c(1, 4)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
