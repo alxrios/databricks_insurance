@@ -430,7 +430,7 @@ Now let's plot its frequencies.
 ```{r}
 plot_frame <- data.frame(type = names(table(insurance$incident_type)))
 plot_frame$frequencies <- as.vector(table(insurance$incident_type))
-plot_frame$bar_labels <- as.vector(as.character(round(100*table(insurance$incident_type)/length(insurance$incident_type), 2)))
+plot_frame$bar_labels <- as.vector(round(100*table(insurance$incident_type)/length(insurance$incident_type), 2))
 
 ggplot(data = plot_frame, aes(x = type, y = frequencies)) +
   geom_bar(stat="identity", color = "blue", fill = "white") +
@@ -439,3 +439,122 @@ ggplot(data = plot_frame, aes(x = type, y = frequencies)) +
 ```
 
 Multi-vehicle collision and single vehicle collision categories occupy more than the 80% of the total observations. Only 9.4% of the observations in the dataset are classified as vehicle theft and 8.3% are classified as parked car, we understand that this means like incidents that took place while the vehicle was stationed.
+
+#### **4.4 incident_severity**
+
+```{r}
+length(which(is.na(insurance$incident_severity)))
+```
+No NA's present in this variable.
+```{r}
+unique(insurance$incident_severity)
+```
+Only four different values. This variable it's an ordered categorical, so let's change its type to an ordered factor.
+```{r}
+insurance$incident_severity <- factor(insurance$incident_severity, 
+                                      levels = c("Trivial Damage", "Minor Damage", 
+                                                 "Major Damage", "Total Loss"), 
+                                      ordered = T)
+```
+Now let's plot the frequencies for each category to see structure of the variable.
+```{r}
+frequencies <- round(100*table(insurance$incident_severity)/dim(insurance)[1], 2)
+plot_frame <- data.frame(severity = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = severity, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Severity of the incident frequencies.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4)
+
+```
+
+Surprisingly, trivial damage is the category with less observations, this can be due to the fact that most policies don't start to cover car's damage until the price is above a certain threshold. The category with most observations is minor damage with the 35.12% of them, and the categories major damage and total loss are almost equal with near the 28% of the observations for each one.
+
+### **5 collision**
+
+```{r}
+head(insurance$collision)
+```
+This variable contains two, so let's add two new columns to the dataset with their information.
+```{r}
+insurance$collision_type <- insurance$collision$type
+insurance$vehicles_involved <- insurance$collision$number_of_vehicles_involved
+```
+
+#### **5.1 collision_type**
+
+```{r}
+length(which(is.na(insurance$collision_type)))
+```
+This variable contains 7134 missing values, this is a 17.65% over the total number of rows.
+```{r}
+unique(insurance$collision_type)
+```
+It contains only three unique values, apart from the missing ones. Since it's a categorical variable, let's transform its type into an unordered factor.
+```{r}
+insurance$collision_type <- factor(insurance$collision_type)
+```
+Now let's plot the frequencies for each category.
+
+```{r}
+frequencies <- round(100*table(insurance$collision_type)/dim(insurance)[1], 2)
+plot_frame <- data.frame(collision_type = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = collision_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of the types of collision.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4)
+```
+
+We can see that the most observed type of collision is rear collision with almost the 29% of the observations followed by side collision with the 28%. Lastly front collision occupy near the 26% of the rows.
+
+To try to know more about the missing observations for this variable, let's analyze the values they take for the variable incident_type.
+
+```{r}
+subset_incidents <- insurance$incident_type[which(is.na(insurance$collision_type))]
+frequencies <- round(100*table(subset_incidents)/length(subset_incidents), 2)
+plot_frame <- data.frame(incident_type = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = incident_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incident type frequencies for the observations with collision type missing.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4)
+```
+
+Looks pretty similar to the distribution of the rest of the observations.
+In this case it could make sense to think that the missing observations are not just missing, but also cases were the collision it's just unkown, like in a case of vandalism were the car was parked in the street or a heavy impact in which the car is so damaged that it's impossible to know the side of the collision or because it was heavy impacted in several ways. So this time, let's try to put all the missing observations into a new category that will be named as 'unknown'.
+
+```{r}
+# Let's add again the content into a new column.
+insurance$collision_type <- insurance$collision$type
+insurance$collision_type <- replace(insurance$collision_type, which(is.na(insurance$collision_type)), "unknown")
+insurance$collision_type <- factor(insurance$collision_type)
+head(insurance$collision_type)
+
+frequencies <- round(100*table(insurance$collision_type)/dim(insurance)[1], 2)
+plot_frame <- data.frame(collision_type = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = collision_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of the types of collision.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4) 
+```
+
+#### **5.2 vehicles_involved**
+
+```{r}
+length(which(is.na(insurance$vehicles_involved)))
+```
+There are no NA values in this variable.
+```{r}
+unique(insurance$vehicles_involved)
+```
+Surprisingly, this variable only takes two values one, and four. 
+```{r}
+round(100*table(insurance$vehicles_involved)/length(insurance$vehicles_involved), 2)
+```
+One appears almost in the 58% o the observations while 4 in the 42%.
