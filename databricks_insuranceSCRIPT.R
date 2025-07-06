@@ -652,50 +652,101 @@ unique(insurance$vehicles_involved)
 round(100*table(insurance$vehicles_involved)/length(insurance$vehicles_involved), 2)
 scales::percent(as.vector(table(insurance$vehicles_involved)/length(insurance$vehicles_involved)))
 vehicles_table <- paste(round(100*table(insurance$vehicles_involved)/length(insurance$vehicles_involved), 2), "%", sep = "")
-colnames(vehicles_table) <- c(1, 4)
+
+# Let's now observe the values the variable incident_type takes for each number of vehicles
+# involved.
+
+frequencies1 <- table(insurance$incident_type[which(insurance$vehicles_involved == 1)])
+frequencies2 <- table(insurance$incident_type[which(insurance$vehicles_involved == 4)])
+frequencies1 <- round(100*frequencies1/sum(frequencies1))
+frequencies2 <- round(100*frequencies2/sum(frequencies2))
+plot_frame <- data.frame(incident_type = c(names(frequencies1), names(frequencies2)))
+plot_frame$frequencies <- c(as.vector(frequencies1), as.vector(frequencies2))
+plot_frame$n_vehicles <- c(rep(1, 4), rep(4, 4))
+
+ggplot(data = plot_frame, aes(x = incident_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of incident types by number of vehicles involved.") +
+  facet_wrap(~n_vehicles) +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), hjust = 0.75) +
+  coord_flip()
 
 
+# 6 driver
+
+head(insurance$driver)
+
+# Again we have a variable that contains others, so let's add a column for each one of them.
+insurance$driver_age <- insurance$driver$age
+insurance$insured_rel <- insurance$driver$insured_relationship
+insurance$license_issue_d <- insurance$driver$license_issue_date
+
+# 6.1 driver_age
+
+length(which(is.na(insurance$driver_age)))
+# 950 missing values in the variable.
+
+ggplot(insurance, aes(x = driver_age)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("age") +
+  ggtitle("Distribution of driver's age")
+
+summary(insurance$driver_age)
+
+# How many negatives does the variable has?
+
+length(which(insurance$driver_age < 0))
+insurance$driver_age[which(insurance$driver_age < 0)]
+
+insurance$driver_age[which(insurance$driver_age < 0)] <- NA
+
+length(which(insurance$driver_age == 0))
+
+insurance$driver_age[which(insurance$driver_age == 0)] <- NA
+
+# How many ages are less than 16?
+length(which(insurance$driver_age  < 16))
+insurance$driver_age[which(insurance$driver_age < 16)]
+insurance$driver_age[which(insurance$driver_age == 16)]
+length(which(insurance$driver_age  >= 16 & insurance$driver_age <= 18))
+table(insurance$driver_age[which(insurance$driver_age  >= 16 & insurance$driver_age <= 18)])
+
+# Values less than 15 as missing
+insurance$driver_age[which(insurance$driver_age < 15)] <- NA
 
 
+# Let's inspect the distribution of the variable again.
+
+ggplot(insurance, aes(x = driver_age)) + geom_boxplot(color = "cornflowerblue") + coord_flip() +
+  labs(title = "Boxplot of variable driver_age", x = "age") + 
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+summary(insurance$driver_age)
+
+# How many observations have 100 years or more?
+length(which(insurance$driver_age >= 100))
+
+summary(insurance$driver_age[which(insurance$driver_age >= 100)])
+
+# Values bigger or egual than 100 as missing
+insurance$driver_age[which(insurance$driver_age >= 100)] <- NA
+
+summary(insurance$driver_age)
+
+# Distribution of upper outliers
+
+summary(insurance$driver_age)
+# 41 is the 3rd quartile
+u_whisker <- 41 + sum(summary(insurance$driver_age)[c(5, 2)]%*%matrix(c(1, 0, 0, -1), nrow = 2))*1.5
+outliers <- insurance$driver_age[which(insurance$driver_age > u_whisker)]
+summary(outliers)
+
+ggplot(data.frame(outliers), aes(x = outliers)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("age") +
+  ggtitle("Distribution of outlier observations for the variable driver age")
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+quantile(insurance$driver_age, probs = c(0.999), na.rm = T)
+quantile(insurance$driver_age, probs = c(0.25, 0.5, 0.75, 0.99, 0.999), na.rm = T)
 
 
 
