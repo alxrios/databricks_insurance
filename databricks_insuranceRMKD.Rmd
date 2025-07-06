@@ -413,7 +413,7 @@ ggplot(data = plot_frame, aes(x = day, y = frequencies)) +
 
 The distribution of days looks the same like the one for the whole set of hours.
 
-#### **4.3 incident_type**
+##### **4.3 incident_type**
 
 ```{r}
 length(which(is.na(insurance$incident_type)))
@@ -440,7 +440,7 @@ ggplot(data = plot_frame, aes(x = type, y = frequencies)) +
 
 Multi-vehicle collision and single vehicle collision categories occupy more than the 80% of the total observations. Only 9.4% of the observations in the dataset are classified as vehicle theft and 8.3% are classified as parked car, we understand that this means like incidents that took place while the vehicle was stationed.
 
-#### **4.4 incident_severity**
+##### **4.4 incident_severity**
 
 ```{r}
 length(which(is.na(insurance$incident_severity)))
@@ -471,7 +471,7 @@ ggplot(data = plot_frame, aes(x = severity, y = frequencies)) +
 
 Surprisingly, trivial damage is the category with less observations, this can be due to the fact that most policies don't start to cover car's damage until the price is above a certain threshold. The category with most observations is minor damage with the 35.12% of them, and the categories major damage and total loss are almost equal with near the 28% of the observations for each one.
 
-### **5 collision**
+#### **5 collision**
 
 ```{r}
 head(insurance$collision)
@@ -482,7 +482,7 @@ insurance$collision_type <- insurance$collision$type
 insurance$vehicles_involved <- insurance$collision$number_of_vehicles_involved
 ```
 
-#### **5.1 collision_type**
+##### **5.1 collision_type**
 
 ```{r}
 length(which(is.na(insurance$collision_type)))
@@ -544,7 +544,7 @@ ggplot(data = plot_frame, aes(x = collision_type, y = frequencies)) +
   geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4) 
 ```
 
-#### **5.2 vehicles_involved**
+##### **5.2 vehicles_involved**
 
 ```{r}
 length(which(is.na(insurance$vehicles_involved)))
@@ -558,3 +558,128 @@ Surprisingly, this variable only takes two values one, and four.
 round(100*table(insurance$vehicles_involved)/length(insurance$vehicles_involved), 2)
 ```
 One appears almost in the 58% o the observations while 4 in the 42%.
+Let's now observe the values the variable incident_type takes for each number of vehicles involved.
+
+```{r}
+frequencies1 <- table(insurance$incident_type[which(insurance$vehicles_involved == 1)])
+frequencies2 <- table(insurance$incident_type[which(insurance$vehicles_involved == 4)])
+frequencies1 <- round(100*frequencies1/sum(frequencies1))
+frequencies2 <- round(100*frequencies2/sum(frequencies2))
+plot_frame <- data.frame(incident_type = c(names(frequencies1), names(frequencies2)))
+plot_frame$frequencies <- c(as.vector(frequencies1), as.vector(frequencies2))
+plot_frame$n_vehicles <- c(rep(1, 4), rep(4, 4))
+
+ggplot(data = plot_frame, aes(x = incident_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of incident types by number of vehicles involved.") +
+  facet_wrap(~n_vehicles) +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), hjust = 0.75) +
+  coord_flip()
+```
+
+We can see that all the incidents when the number of vehicles involved is 4 are multiple vehicle collisions, as would be reasonable to expect, and when the number of vehicles involved is 1, the category most observed is single vehicle collision.
+
+#### **6 driver**
+
+```{r}
+head(insurance$driver)
+```
+Again we have a variable that contains others, so let's add a column for each one of them.
+```{r}
+insurance$driver_age <- insurance$driver$age
+insurance$insured_rel <- insurance$driver$insured_relationship
+insurance$license_issue_d <- insurance$driver$license_issue_date
+```
+
+##### 6.1 driver_age
+
+```{r}
+length(which(is.na(insurance$driver_age)))
+```
+950 missing values in the variable.
+```{r}
+ggplot(insurance, aes(x = driver_age)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("age") +
+  ggtitle("Distribution of driver's age")
+
+summary(insurance$driver_age)
+```
+There seems to be several problems with this variable, first it looks that some ages take a negative value, second, as can be observed in the histogram, many observations seem to have a value of zero or at least near it, and third, the maximum age registered of 121 seems to high for a driver. Let's start taking a look to how many negative values are in the variable.
+```{r}
+length(which(insurance$driver_age < 0))
+```
+Only six observations take negative values, so let's see which values they take.
+```{r}
+insurance$driver_age[which(insurance$driver_age < 0)]
+```
+All are ages which if even they were positive they seem impossible for a driver to have. So, let's just remove them by changing their value to NA.
+```{r}
+insurance$driver_age[which(insurance$driver_age < 0)] <- NA
+```
+Now let's take a look to how many observations take the value zero.
+```{r}
+length(which(insurance$driver_age == 0))
+```
+6913 observations take the value zero for the driver's age, so changing this values to missing will increase substantially the quantity of missing values in the dataset, but we have no alternative, since zero is obviouslly a non-valid value for the variable.
+```{r}
+insurance$driver_age[which(insurance$driver_age == 0)] <- NA
+insurance$driver_age[which(insurance$driver_age < 16)]
+```
+Since the minimum age for having a driver license in the state of New York is of 15 for a junior driving license, let's put the observation that has a value of 14 as missing and of course the ones that take the value 1, since it don't has any sense.
+```{r}
+insurance$driver_age[which(insurance$driver_age < 15)] <- NA
+```
+Let's inspect the distribution of the variable again.
+```{r}
+ggplot(insurance, aes(x = driver_age)) + geom_boxplot(color = "cornflowerblue") + coord_flip() +
+  labs(title = "Boxplot of variable driver_age", x = "age") + 
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+```
+
+In the boxplot for this variable we can see that many outliers are detected. Let's first inspect the more extreme, for example, it feels like hardly credible that a person of 100 years or more could still driving. Let's see how many of this obsevations are in the dataset.
+```{r}
+# How many observations have 100 years or more?
+length(which(insurance$driver_age >= 100))
+```
+There are 159 observations that have 100 or more years of age. Let's now inspect their distribution.
+```{r}
+summary(insurance$driver_age[which(insurance$driver_age >= 100)])
+```
+The minimum age obtained is of 116 and the maximum is of 121, definetly they don't look like possible values for a driver's age, so let's put them also as missing.
+```{r}
+insurance$driver_age[which(insurance$driver_age >= 100)] <- NA
+```
+Let's obtain again the new boxplot.
+```{r}
+ggplot(insurance, aes(x = driver_age)) + geom_boxplot(color = "cornflowerblue") + coord_flip() +
+  labs(title = "Boxplot of variable driver_age after adding new missing values.", x = "age") + 
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+summary(insurance$driver_age)
+```
+Now with a maximum observed age of 96 years the distribution seems more credible than before.
+Possible outliers still being plotted in the boxplot, so let's just take a look to their distribution.
+```{r}
+u_whisker <- 41 + sum(summary(insurance$driver_age)[c(5, 2)]%*%matrix(c(1, 0, 0, -1), nrow = 2))*1.5
+outliers <- insurance$driver_age[which(insurance$driver_age > u_whisker)]
+
+length(outliers)
+
+ggplot(data.frame(outliers), aes(x = outliers)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("age") +
+  ggtitle("Distribution of outlier observations for the variable driver age")
+
+summary(outliers)
+```
+Now it would be 592 possible outliers of which the 75% have 67 years of age or less, with a maximum of 96 has has been said before.
+
+Finally let's plot the distribution of the variable again after adding the missing values.
+```{r}
+ggplot(insurance, aes(x = driver_age)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("age") +
+  ggtitle("Distribution of driver's agea after adding more missing values.")
+
+quantile(insurance$driver_age, probs = c(0.25, 0.5, 0.75, 0.99, 0.999), na.rm = T)
+```
+Now the variable counts with 8032 missing values, this is almost a 20% of the total of the rows.
+75% of the observations have an age between 41 and 15 years and the 99% of the observations has as much as 64 years of age, so we can see that the claims are very concentrated among the working age population, maybe just because the majority of them need to use the car on a daily basis.
