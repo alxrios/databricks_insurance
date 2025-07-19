@@ -748,6 +748,222 @@ ggplot(data.frame(outliers), aes(x = outliers)) +
 quantile(insurance$driver_age, probs = c(0.999), na.rm = T)
 quantile(insurance$driver_age, probs = c(0.25, 0.5, 0.75, 0.99, 0.999), na.rm = T)
 
+# Distribution of age change for each incident severity category?
+
+# There were NA values for incident severity?
+length(which(is.na(insurance$incident_severity)))
+# Ans: no
+# How many categories the variable had?
+unique(insurance$incident_severity)
+
+# Let's start with a loop over the categories with the function summary
+for (i in unique(insurance$incident_severity)) {
+  cat("Category: ", i, "\n")
+  print(summary(insurance$driver_age[which(insurance$incident_severity == i)]))
+}
+
+# Now let's plot the histograms for each severity category
+
+ggplot(insurance, aes(x = driver_age)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("age") +
+  ggtitle("Distribution of driver's age for each kind of incident severity") + 
+  facet_wrap(~incident_severity)
+
+# 6.2 insured_rel
+
+length(which(is.na(insurance$insured_rel)))
+# The variable has no missing observations.
+unique(insurance$insured_rel)
+# The variable is categorical without order, so let's change its type to factor
+insurance$insured_rel <- factor(insurance$insured_rel)
+
+# Let's plot its frequencies
+
+frequencies <- round(100*table(insurance$insured_rel)/dim(insurance)[1], 2)
+frequencies 
+
+plot_frame <- data.frame(relative = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = relative, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of the variable insured_rel.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.2)
+
+
+# 6.3 license_issue_d
+
+
+head(insurance$license_issue_d)
+length(which(is.na(insurance$license_issue_d)))
+
+as_date(insurance$license_issue_d[5], format = "%d-%m-%Y")
+day(as_date(insurance$license_issue_d[5], format = "%d-%m-%Y"))
+month(as_date(insurance$license_issue_d[5], format = "%d-%m-%Y"))
+year(as_date(insurance$license_issue_d[5], format = "%d-%m-%Y"))
+
+head(as_date(insurance$license_issue_d, format = "%d-%m-%Y"))
+
+insurance$license_issue_d <- as_date(insurance$license_issue_d, format = "%d-%m-%Y")
+
+# 12 failed to parse, let's return them again to character and try to know why this is happening
+
+insurance$license_issue_d <- insurance$driver$license_issue_date
+check <- insurance$license_issue_d
+typeof(check[1])
+class(check[1])
+
+check <- sort(check)
+head(check)
+length(unique(check))
+# 6217 different dates for 40414 observations
+head(sort(table(check), decreasing = T))
+# 19899 observations take the value "01-01-1900" so let's directly assume that they are missing
+# observations and change them to NA.
+check[which(check == "01-01-1900")] <- NA
+head(sort(table(check), decreasing = T))
+tail(check)
+# We can see that at least two errors are caused by different formatting in the dates, 
+# which appear with slashes as separators instead of hyphens, also the years looks badly recorded.
+# So this two observations need to be reclassified as missing.
+#
+# After finishing the next step, continue checking if there are more observations with slashes.
+#
+# Now let's split in three columns the days, months and years of the dates, to see if all of them
+# are in the expected range of values.
+# lic_days <- numeric()
+# lic_months <- numeric()
+# lic_years <- numeric()
+# for (i in which(!is.na(check))) {
+#   aux_split <- unlist(strsplit(check[i], "-"))
+#   lic_days <- c(lic_days, aux_split[1])
+#   lic_months <- c(lic_months, aux_split[2])
+#   lic_years <- c(lic_years, aux_split[3])
+# }
+
+# This loop isn't going to work while having observations with different separators than -
+# so let's first check how many observations are with other kinds of separators.
+#
+# Let's remove the NA's for the testing since they are of no interest
+check <- check[which(!is.na(check))]
+strsplit(check[1], "-")
+strsplit(check[20026], "-")
+length(strsplit(check[1], "-"))
+class(strsplit(check[1], "-"))
+typeof(strsplit(check[1], "-"))
+length(strsplit(check[20026], "-"))
+class(strsplit(check[20026], "-"))
+
+length(unlist(strsplit(check[1], "-")))
+length(unlist(strsplit(check[20026], "-")))
+
+# Let's check all the elements that after splitting them and unlist them only have length 1.
+without_na <- which(!is.na(insurance$license_issue_d))
+problems_index <- numeric()
+for (i in 1:length(insurance$license_issue_d[without_na])) {
+  if (length(unlist(strsplit(insurance$license_issue_d[without_na][i], "-"))) == 1) {
+    problems_index <- c(problems_index, i)
+  }
+}
+
+length(problems_index)
+check[problems_index]
+insurance$license_issue_d[without_na][problems_index]
+
+# Replacing the problematic dates with NA's
+insurance$license_issue_d[without_na][problems_index] <- NA
+insurance$license_issue_d <- as_date(insurance$license_issue_d, format = "%d-%m-%Y")
+
+typeof(insurance$license_issue_d)
+class(insurance$license_issue_d)
+
+# Now let's inspect the dates
+range(insurance$license_issue_d, na.rm = T)
+which(insurance$license_issue_d == "9740-01-31")
+insurance$license_issue_d[15853]
+head(sort(table(insurance$license_issue_d), decreasing = T))
+range(year(insurance$license_issue_d), na.rm = T)
+head(sort(year(insurance$license_issue_d), decreasing = T))
+
+length(which(year(insurance$license_issue_d) == 1900))
+
+insurance$license_issue_d[which(year(insurance$license_issue_d) == 1900)] <- NA
+insurance$license_issue_d[which(year(insurance$license_issue_d) == 9740)] <- NA
+
+# Let's recalculate the range
+range(insurance$license_issue_d, na.rm = T)
+
+# From which year was the older incident registered?
+max(insurance$incident_date, na.rm = T)
+
+# There should not be license issue dates older than 2020
+length(which(year(insurance$license_issue_d) > 2020))
+
+# Let's tabulate them
+sort(insurance$license_issue_d[which(year(insurance$license_issue_d) > 2020)], decreasing = T)
+
+# Range of claim dates:
+range(insurance$claim_date, na.rm = T)
+
+# Let's put all the license issue dates posterior to 2020 to NA.
+insurance$license_issue_d[which(year(insurance$license_issue_d) > 2020)] <- NA
+range(insurance$license_issue_d, na.rm = T)
+
+# Now that the variable seems to be cleaner, let's continue analyzing it a little more
+#
+# First let's observe the distribution of the years of the variable
+length(unique(year(insurance$license_issue_d)))
+# 57 different years in the variable.
+frequencies <- sort(table(year(insurance$license_issue_d)))
+plot_frame <- data.frame(year = names(frequencies))
+plot_frame$frequency <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = year, y = frequency)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Observations for each year") + coord_flip()
+
+length(which(is.na(insurance$license_issue_d)))
+
+# Now let's try to plot the graph again but with the years sorted
+order(plot_frame$year)
+plot_frame[order(plot_frame$year), ]
+
+ggplot(data = plot_frame[order(plot_frame$year), ], aes(x = year, y = frequency)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("License issued by year") + coord_flip()
+
+
+test <- plot_frame[order(plot_frame$year, decreasing = F), ]
+test$year <- as.numeric(test$year)
+ggplot(data = test, aes(x = year, y = frequency)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("License issued by year") + coord_flip()
+
+
+plot_frame$year <- as.numeric(plot_frame$year)
+
+# Let's try with the relative ones
+frequencies <- sort(round(100*table(year(insurance$license_issue_d))/40416, 2))
+plot_frame <- data.frame(year = names(frequencies))
+plot_frame$frequency <- as.vector(frequencies)
+plot_frame$year <- as.numeric(plot_frame$year)
+
+ggplot(data = plot_frame[order(plot_frame$year), ], aes(x = year, y = frequency)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("License issued by year") + coord_flip()
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
