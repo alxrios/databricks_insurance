@@ -591,7 +591,7 @@ insurance$insured_rel <- insurance$driver$insured_relationship
 insurance$license_issue_d <- insurance$driver$license_issue_date
 ```
 
-##### 6.1 driver_age
+##### **6.1 driver_age**
 
 ```{r}
 length(which(is.na(insurance$driver_age)))
@@ -662,7 +662,6 @@ Possible outliers still being plotted in the boxplot, so let's just take a look 
 ```{r}
 u_whisker <- 41 + sum(summary(insurance$driver_age)[c(5, 2)]%*%matrix(c(1, 0, 0, -1), nrow = 2))*1.5
 outliers <- insurance$driver_age[which(insurance$driver_age > u_whisker)]
-
 length(outliers)
 
 ggplot(data.frame(outliers), aes(x = outliers)) +
@@ -683,3 +682,133 @@ quantile(insurance$driver_age, probs = c(0.25, 0.5, 0.75, 0.99, 0.999), na.rm = 
 ```
 Now the variable counts with 8032 missing values, this is almost a 20% of the total of the rows.
 75% of the observations have an age between 41 and 15 years and the 99% of the observations has as much as 64 years of age, so we can see that the claims are very concentrated among the working age population, maybe just because the majority of them need to use the car on a daily basis.
+
+Now let's going to see if age distribution changes for each category of the variable incident severity, so we could think that maybe some age ranges (like young people) are associated with worst types of accidents or that elderly people are associated with more trivial ones, like a bump while parking.
+```{r}
+# Let's start with a loop over the categories with the function summary
+for (i in unique(insurance$incident_severity)) {
+  cat("Category: ", i, "\n")
+  print(summary(insurance$driver_age[which(insurance$incident_severity == i)]))
+}
+
+# Now let's plot the histograms for each severity category
+
+ggplot(insurance, aes(x = driver_age)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("age") +
+  ggtitle("Distribution of driver's age for each kind of incident severity") + 
+  facet_wrap(~incident_severity)
+```
+
+All age distributions look pretty similar, the only appreciable difference is that trivial damage category contains much less cases than the others, but that doesn't affect to its observed quantiles.
+
+##### **6.2 insured_rel**
+
+```{r}
+length(which(is.na(insurance$insured_rel)))
+```
+The variable has no missing observations.
+```{r}
+unique(insurance$insured_rel)
+```
+The variable is categorical without order, so let's change its type to factor.
+```{r}
+insurance$insured_rel <- factor(insurance$insured_rel)
+```
+Let's plot the variable frequencies.
+```{r}
+frequencies <- round(100*table(insurance$insured_rel)/dim(insurance)[1], 2)
+plot_frame <- data.frame(relative = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = relative, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of the variable insured_rel.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.2)
+```
+
+##### **6.3 license_issue_d**
+
+```{r}
+head(insurance$license_issue_d)
+length(which(is.na(insurance$license_issue_d)))
+```
+This variable contains 489 missing observations. Since it contains dates let's also transform its type.
+```{r}
+head(as_date(insurance$license_issue_d, format = "%d-%m-%Y"))
+```
+As can be seen in the warning message, there seems to be a problem with 12 observations that can't be converted into date properly. Let's try to find the reason for this to happen.
+```{r}
+check <- insurance$license_issue_d
+check <- sort(check)
+tail(check)
+```
+We can observe that at least two observations contain slashes as separators instead of hyphens, so let's check if there are more observations with this problem.
+```{r}
+# For simplicity let's take off the NA values in the for loop
+without_na <- which(!is.na(insurance$license_issue_d))
+problems_index <- numeric()
+for (i in 1:length(insurance$license_issue_d[without_na])) {
+  if (length(unlist(strsplit(insurance$license_issue_d[without_na][i], "-"))) == 1) {
+    problems_index <- c(problems_index, i)
+  }
+}
+
+length(problems_index)
+insurance$license_issue_d[without_na][problems_index]
+```
+Now it's clear that the problems are being caused by this twelve observations that contain slashes instead of hyphens. In adition we can see that this dates contain unexpected years, so let's replace this twelve values by NA's.
+```{r}
+# Replacing the problematic dates with NA's
+insurance$license_issue_d[without_na][problems_index] <- NA
+insurance$license_issue_d <- as_date(insurance$license_issue_d, format = "%d-%m-%Y")
+```
+Now let's continue inspecting the dates of the variable.
+```{r}
+range(insurance$license_issue_d, na.rm = T)
+```
+It seems that there still being problems with some dates, it's clear that we can't have licenses issued in the year 9740 nor the year 1900, so let's change this dates to NA as well.
+```{r}
+length(which(year(insurance$license_issue_d) == 1900))
+```
+Changing the value to missing for the observations dated in the year 1900 will add 19900 new missing observations for this variable, but we have no better option for the moment.
+```{r}
+insurance$license_issue_d[which(year(insurance$license_issue_d) == 1900)] <- NA
+insurance$license_issue_d[which(year(insurance$license_issue_d) == 9740)] <- NA
+```
+Now let's obtain the range of the dates again.
+```{r}
+range(insurance$license_issue_d, na.rm = T)
+```
+The range of the years still taking values higher than expected.
+```{r}
+max(insurance$incident_date, na.rm = T)
+```
+The highest year registered for the variable incident date was 2020, so having license issue dates after that year would be weird so it would mean that the driver hadn't have his driving license at the moment of the incident. We could argue that this is due to cause the driver was learning with that car at the moment of the incident or that he was driving without a licencse, but then it would be really extrange to make a claim to the insurance company giving them that information. In either case, let's see how many observations are posterior to 2020.
+```{r}
+length(which(year(insurance$license_issue_d) > 2020))
+```
+Only 29 observations register years after 2020.
+```{r}
+sort(insurance$license_issue_d[which(year(insurance$license_issue_d) > 2020)], decreasing = T)
+```
+Let's remember the range of the dates were the claims were made:
+```{r}
+range(insurance$claim_date, na.rm = T)
+```
+Claim dates only reach the year 2020, if the data about the driving license of the driver is registered at the claim date, it would be impossible to know the date of the driving license if it were posterior to that date even if the driver was an apprentice in the process of obtaining it or maybe the claim was modified to add new information. Since only 29 observations have this issue let's just put their license dates as missing values.
+```{r}
+insurance$license_issue_d[which(year(insurance$license_issue_d) > 2020)] <- NA
+range(insurance$license_issue_d, na.rm = T)
+```
+The new range for the variable goes as far as the 24th of october of 2020.
+Now that the variable seems to be cleaner, let's continue analyzing it a little more.
+```{r}
+frequencies <- sort(table(year(insurance$license_issue_d)))
+plot_frame <- data.frame(year = names(frequencies))
+plot_frame$frequency <- as.vector(frequencies)
+plot_frame$year <- as.numeric(plot_frame$year)
+
+ggplot(data = plot_frame[order(plot_frame$year), ], aes(x = year, y = frequency)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("License issued by year") + coord_flip()
+```
