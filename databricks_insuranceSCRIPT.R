@@ -952,18 +952,440 @@ ggplot(data = plot_frame[order(plot_frame$year), ], aes(x = year, y = frequency)
   geom_bar(stat="identity", color = "blue", fill = "white") +
   ggtitle("License issued by year") + coord_flip()
 
+# Are all the incident dates older than the license issue date?
+check_frame <- insurance[, c("incident_date", "license_issue_d")]
+dim(check_frame)
+check_frame$diff_dates <- check_frame$incident_date - check_frame$license_issue_d
+range(check_frame$diff_dates, na.rm = T)
+# There are negative differences, so there are incidents that were registered before the 
+# date of the license issuing.
+
+ggplot(check_frame, aes(x = as.numeric(diff_dates))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between incident and license issue dates")
+
+length(which(check_frame$diff_dates < 0))
+
+summary(check_frame$diff_dates[which(check_frame$diff_dates < 0)])
+
+dim(check_frame)
+
+# Let's put all the observations with negative differences to NA.
+
+# First let's add a new column in the dataset insurance
+insurance$diff_li_days <- insurance$incident_date - insurance$license_issue_d
+range(insurance$diff_li_days, na.rm = T)
+insurance$diff_li_days[which(insurance$diff_li_days < 0)] <- NA
+range(insurance$diff_li_days, na.rm = T)
+
+ggplot(insurance, aes(x = as.numeric(diff_li_days))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between incident and license issue dates")
+
+summary(insurance$diff_li_days)
 
 
+# 7 claim_amount
+
+head(insurance$claim_amount)
+# Again we have a variable that contains others, so let's add them to the original dataset
+insurance$claim_amount_total <- insurance$claim_amount$total
+insurance$claim_amount_injury <- insurance$claim_amount$injury
+insurance$claim_amount_property <- insurance$claim_amount$property
+insurance$claim_amount_vehicle <- insurance$claim_amount$vehicle
+
+# 7.1 claim_amount_total
+range(insurance$claim_amount_total)
+summary(insurance$claim_amount_total)
+length(which(is.na(insurance$claim_amount_total)))
+
+ggplot(insurance, aes(x = claim_amount_total)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable claim amount total.")
+
+# Bimodal distribution
+
+# Let's check if the median for the left is near 10000 and if for the right is about 60000.
+
+summary(insurance$claim_amount_total[which(insurance$claim_amount_total < 15000)])
+
+ggplot(insurance[which(insurance$claim_amount_total < 15000), ], aes(x = claim_amount_total)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable claim amount total.")
+
+# Let's try with 10000
+
+summary(insurance$claim_amount_total[which(insurance$claim_amount_total < 10000)])
+
+ggplot(insurance[which(insurance$claim_amount_total < 10000), ], aes(x = claim_amount_total)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable claim amount total.")
+
+# Now let's check if the median for the right side is arround 60000
+summary(insurance$claim_amount_total[which(insurance$claim_amount_total > 10000)])
+ggplot(insurance[which(insurance$claim_amount_total > 10000), ], aes(x = claim_amount_total)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable claim amount total.")
 
 
+# 7.2 claim_amount_injury
+
+ggplot(insurance, aes(x = claim_amount_injury)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable claim amount injury.")
+
+summary(insurance$claim_amount_injury)
+
+# 7.3 claim_amount_property
+
+summary(insurance$claim_amount_property)
+
+ggplot(insurance, aes(x = claim_amount_property)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable claim amount property.")
+
+# 7.4 claim_amount_vehicle
 
 
+summary(insurance$claim_amount_vehicle)
 
+ggplot(insurance, aes(x = claim_amount_vehicle)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable claim amount vehicle.")
 
+# Now let's check if the sum of the three variables is equal to the quantity registered in
+# claim amount total.
 
+check_total <- logical(dim(insurance)[1])
 
+for (i in 1:dim(insurance)[1]) {
+  if (insurance$claim_amount_total[i] == sum(insurance[i, 46:48])) {
+    check_total[i] <- TRUE
+  } else {
+    check_total[i] <- FALSE
+  }
+}
 
+sum(check_total) == length(insurance$claim_amount_total)
 
+# 8 number_of_witnesses
 
+head(insurance$number_of_witnesses)
+range(insurance$number_of_witnesses)
+summary(insurance$number_of_witnesses)
+unique(insurance$number_of_witnesses)
+length(which(is.na(insurance$number_of_witnesses)))
+
+plot_frame <- data.frame(witnesses = sort(unique(insurance$number_of_witnesses)))
+plot_frame$frequencies <- as.vector(unname(table(insurance$number_of_witnesses)))
+
+ggplot(data = plot_frame, aes(x = witnesses, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of witnesses")
+
+# Repeat the plot with the relative frequencies.
+
+plot_frame <- data.frame(witnesses = sort(unique(insurance$number_of_witnesses)))
+plot_frame$frequencies <- round(100*as.vector(unname(table(insurance$number_of_witnesses)))/length(insurance$number_of_witnesses), 2)
+
+ggplot(data = plot_frame, aes(x = witnesses, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative requencies of witnesses") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.2)
+
+# Let's explore the incident types for the observations with 0 witnesses.
+
+table(insurance$incident_type[which(insurance$number_of_witnesses == 0)])
+round(100*table(insurance$incident_type[which(insurance$number_of_witnesses == 0)])/dim(insurance)[1], 2)
+
+# Let's explore the incidents for the rest of the number of witnesses registered
+round(100*table(insurance$incident_type[which(insurance$number_of_witnesses == 1)])/dim(insurance)[1], 2)
+round(100*table(insurance$incident_type[which(insurance$number_of_witnesses == 2)])/dim(insurance)[1], 2)
+round(100*table(insurance$incident_type[which(insurance$number_of_witnesses == 3)])/dim(insurance)[1], 2)
+
+# 9 suspicious_activity
+
+head(insurance$suspicious_activity)
+length(which(is.na(insurance$suspicious_activity)))
+
+# Has no NA's.
+
+plot_frame <- data.frame(suspicious = sort(unique(insurance$suspicious_activity)))
+plot_frame$frequencies <- round(100*as.vector(unname(table(insurance$suspicious_activity)))/length(insurance$suspicious_activity), 2)
+
+ggplot(data = plot_frame, aes(x = suspicious, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative requencies of suspicious activity") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.2)
+
+# Let's test replacing TRUE and FALSE values with the function replace.
+
+replace(c(TRUE, FALSE), which(c(TRUE, FALSE) == TRUE), 1)
+test <- insurance$suspicious_activity
+test <- replace(test, which(test == TRUE), 1)
+unique(test)
+table(test)
+table(test)/length(test)
+
+# It works, so let's apply it on the dataset
+
+insurance$suspicious_activity <- replace(insurance$suspicious_activity, which(insurance$suspicious_activity == TRUE), 1)
+table(insurance$suspicious_activity)
+table(insurance$suspicious_activity)/dim(insurance)[1]
+
+# Convert it to factor
+
+insurance$suspicious_activity <- factor(insurance$suspicious_activity)
+head(insurance$suspicious_activity)
+
+# 10 months_as_customer
+
+head(insurance$months_as_customer)
+length(which(is.na(insurance$months_as_customer)))
+# No NA's.
+range(insurance$months_as_customer)
+summary(insurance$months_as_customer)
+# This variable should be less than the driver's age
+
+ggplot(insurance, aes(x = months_as_customer)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable months as customer.")
+
+ggplot(insurance, aes(x = months_as_customer)) + geom_boxplot(color = "cornflowerblue") + coord_flip() +
+  labs(title = "Boxplot of variable months_as_customer", x = "months") + 
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+# Let's check if drivers ages are take higher values than the variable months_as_customer for
+# all the observations.
+head(insurance$driver_age)
+summary(insurance$driver_age)
+
+check_frame <- insurance[which(!is.na(insurance$driver_age)), c("driver_age", "months_as_customer")]
+summary(check_frame)
+summary(insurance[, c("driver_age", "months_as_customer")])
+# Ok, we don't selected any NA values.
+
+# Now let's convert months into years.
+check_frame$years_as_customer <- check_frame$months_as_customer/12
+# First let's check if driver_age < years_as_customer for all the observations.
+check_frame$check_less <- rep(0L, dim(check_frame)[1])
+# Now let's do the loop
+for (i in 1:length(check_frame$driver_age)) {
+  if (check_frame$years_as_customer[i] < check_frame$driver_age[i]) {
+    check_frame$check_less[i] <- 1L
+  }
+}
+
+sum(check_frame$check_less)
+dim(check_frame)[1] - sum(check_frame$check_less)
+# 29394 observations are ok
+# 2990 are not ok
+round(100*2990/29394, 2)
+# This is a 10% of the observations (after removing the NA's in driver age)
+head(check_frame[which(check_frame$check_less == 0), ], 20)
+
+# This months should be classified as missing, since their information is not consistent with
+# the one in driver's age.
+#
+# Now let's check again, but this time let's demand the difference between the driver_age and
+# the years as customer be at least bigger or equal to 16.
+#
+# Let's select a new frame among the observations that accounted for the previous requirement
+check_frame2 <- check_frame[which(check_frame$check_less == 1), ]
+check_frame2$check16 <- rep(0L, dim(check_frame2)[1])
+
+for (i in 1:dim(check_frame2)[1]) {
+  if ((check_frame2$driver_age[i] - check_frame2$years_as_customer[i]) >= 16) {
+    check_frame2$check16[i] <- 1L
+  }
+}
+
+sum(check_frame2$check16)
+length(check_frame2$check16)
+# Only 18005 of 29394 observations comply the condition.
+round(100*18005/29394, 2)
+# This is the 61.25% of the observations that we selected and the
+round(100*18005/40416, 2)
+# 44.5 % over the total number of observations.
+
+# So finally let's put all this observations as missing.
+# For not deleting the original column, let's create another one.
+insurance$months_cust2 <- insurance$months_as_customer
+# Auxiliar dataframe for obtaining the indexes of the observations that are going to be changed
+# to NA. (check_frame is not valid because it not included the observartions that were
+# previously classified as NA).
+index_frame <- insurance[, c("driver_age", "months_as_customer")]
+index_frame$years_as_customer <- index_frame$months_as_customer/12
+index_frame$check <- numeric(dim(index_frame)[1])
+# If the difference between the driver's age and the years_as_customer variable is bigger or 
+# equal than 16 the check value takes the value 1 and 0 otherwise.
+for (i in which(!is.na(index_frame$driver_age))) {
+  if ((index_frame$driver_age[i] - index_frame$years_as_customer[i]) >= 16) {
+    index_frame$check[i] <- 1
+  }
+}
+
+table(index_frame$check)
+18005/22411
+18005/40416
+
+insurance$months_cust2[which(index_frame$check == 0)] <- NA
+summary(insurance$months_cust2)
+22411/40416
+
+summary(insurance$months_as_customer)
+summary(insurance$months_cust2)
+
+ggplot(insurance, aes(x = months_cust2)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable months_cust2.")
+
+# Let's try to plot both variables histograms in a panel plot.
+plot_frame <- data.frame(months = c(insurance$months_as_customer, insurance$months_cust2))
+plot_frame$var <- c(rep(times = 40412, "months_as_customer"), rep(times = 40412, "months_cust2"))
+
+ggplot(plot_frame, aes(x = months)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Distribution of months_as_customer and months_cust2.")  +
+  facet_wrap(~var)
+
+# 11 CUST_ID
+
+head(insurance$CUST_ID)
+length(unique(insurance$CUST_ID))
+head(sort(table(insurance$CUST_ID), decreasing = T))
+# It's hard to know with certanity what this variable contains, if they were customer id's, it
+# would result in the variable containing a customer with 16708 observations, which seems 
+# a pretty high number if not for a large car renting company for example. Without more 
+# information let's just forget about this variable for the rest of the project.
+
+# 12 POLICYTYPE
+
+head(insurance$POLICYTYPE)
+length(which(is.na(insurance$POLICYTYPE)))
+unique(insurance$POLICYTYPE)
+# Only two types of policies, third party and comprehensive.
+table(insurance$POLICYTYPE)
+# Very equally distributed, strange when comprehensive should have a higher cost than third
+# party.
+
+freqs <- round(100*table(insurance$POLICYTYPE)/length(insurance$POLICYTYPE), 2)
+plot_frame <- data.frame(type = names(freqs))
+plot_frame$frequency <- as.vector(freqs)
+
+bar_labels <- as.vector(as.character(freqs))
+bar_labels <- paste(bar_labels, "%", sep = "")
+
+ggplot(data = plot_frame, aes(x = type, y = frequency)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Policy type frequencies") + geom_text(aes(label = bar_labels), vjust = 1.3)
+
+# This variable should be changed to factor.
+
+insurance$POLICYTYPE <- as.factor(insurance$POLICYTYPE)
+
+# Does change the driver age distribution for each policy type?
+summary(insurance$driver_age[which(insurance$POLICYTYPE == "TP")])
+summary(insurance$driver_age[which(insurance$POLICYTYPE == "COMP")])
+# The basic statistics almost don't change.
+
+# 13 POL_ISSUE_DATE
+
+head(insurance$POL_ISSUE_DATE)
+length(which(is.na(insurance$POL_ISSUE_DATE)))
+# This variable should be changed to date
+test <- as_date(insurance$POL_ISSUE_DATE[1], format = "%d-%m-%Y")
+year(test)
+month(test)
+day(test)
+
+insurance$POL_ISSUE_DATE <- as_date(insurance$POL_ISSUE_DATE, format = "%d-%-%m-%Y")
+range(insurance$POL_ISSUE_DATE, na.rm = T)
+range(year(insurance$POL_ISSUE_DATE), na.rm = T)
+# The conversion has failed, revise.
+# Let's check that all the observations are in the same format
+check_frame <- data.frame(original = insurance$POL_ISSUE_DATE)
+
+# First let's check that all the observations contain two hyphens
+sum("-" == unlist(strsplit(check_frame$original[1], "")))
+
+check_frame$check_hyphens <- numeric(length(check_frame$original))
+for (i in 1:length(check_frame$original)) {
+  if (sum("-" == unlist(strsplit(check_frame$original[i], ""))) == 2){
+    check_frame$check_hyphens[i] <- 1
+  }
+}
+
+sum(check_frame$check_hyphens)
+# All are separated by hyphens
+# Now let's store the year, month and day of the date separately
+check_frame$years <- numeric(length(check_frame$original))
+check_frame$months <- numeric(length(check_frame$original))
+check_frame$days <- numeric(length(check_frame$original))
+
+for (i in 1:length(check_frame$original)) {
+  splitted <- unlist(strsplit(check_frame$original[i], "-"))
+  check_frame$day[i] <- splitted[1]
+  check_frame$month[i] <- splitted[2]
+  check_frame$year[i] <- splitted[3]
+}
+
+range(check_frame$check_hyphens)
+range(check_frame$day)
+range(check_frame$month)
+range(check_frame$year)
+# All seem ok
+
+as_date(insurance$POL_ISSUE_DATE[1:500], format = "%d-%m-%Y")
+test <- as_date(insurance$POL_ISSUE_DATE, format = "%d-%m-%Y")
+
+# The error was in the previous code
+
+insurance$POL_ISSUE_DATE <- as_date(insurance$POL_ISSUE_DATE, format  = "%d-%m-%Y")
+range(insurance$POL_ISSUE_DATE)
+table(year(insurance$POL_ISSUE_DATE))
+
+plot_frame <- data.frame(year = unique(year(insurance$POL_ISSUE_DATE)))
+plot_frame$frequency <- as.vector(round(100*table(year(insurance$POL_ISSUE_DATE))/length(insurance$POL_ISSUE_DATE), 2))
+
+bar_labels <- paste(as.character(plot_frame$frequency), "%", sep = "")
+
+ggplot(data = plot_frame, aes(x = year, y = frequency)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of the policy issue years") + geom_text(aes(label = bar_labels), vjust = 1.3)
+
+# 14 POL_EFF_DATE
+
+head(insurance$POL_EFF_DATE)
+length(which(is.na(insurance$POL_EFF_DATE)))
+# This variable should be changed to date
+# POL_EFF_DATE should be older than POL_ISSUE_DATE
+
+# 15 POL_EXPIRY_DATE
+
+head(insurance$POL_EXPIRY_DATE)
+length(which(is.na(insurance$POL_EXPIRY_DATE)))
+
+# This variable should be changed to date.
+# POL_EXPIRY_DATE should be older than POL_ISSUE_DATE and POL_EFF_DATE
+
+# 16 BODY
+
+head(insurance$BODY)
+# "" should be reclassified as NA's
+length(which(is.na(insurance$BODY)))
+# No previous NA's
+length(unique(insurance$BODY))
+# 75 different categories which should be reduced after changing "" to NA.
+# This variable should be changed to factor.
+
+# 17 MAKE
+
+head(insurance$MAKE)
+length(which(is.na(insurance$MAKE)))
+# No previous NA's
+# This variable should be changed to factor.
+length(unique(insurance$MAKE))
+# 171 different categories before making any change
 
 
