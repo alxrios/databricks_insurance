@@ -24,7 +24,11 @@ drop_index <- numeric()
 for (i in duplicated_pol_claims) {
   drop_index <- c(drop_index, which(claims$policy_no == i))
 }
-
+##### NEW BLOCK
+for (i in duplicated_policies) {
+  drop_index <- c(drop_index, which(claims$policy_no == i))
+}
+##### END NEW BLOCK
 # Merge
 insurance <- merge(claims[-drop_index, ], policies, by.x = c("policy_no"), 
                    by.y = c("POLICY_NO"), all.x = T)
@@ -92,3 +96,35 @@ insurance$license_issue_d <- as_date(insurance$license_issue_d, format = "%d-%m-
 insurance$license_issue_d[which(year(insurance$license_issue_d) == 1900)] <- NA
 insurance$license_issue_d[which(year(insurance$license_issue_d) == 9740)] <- NA
 insurance$license_issue_d[which(year(insurance$license_issue_d) > 2020)] <- NA
+# Adding new variable with the difference between incident date and the license issue date
+insurance$diff_li_days <- insurance$incident_date - insurance$license_issue_d
+insurance$diff_li_days[which(insurance$diff_li_days < 0)] <- NA
+
+# Disaggregating the variable claim_amount
+insurance$claim_amount_total <- insurance$claim_amount$total
+insurance$claim_amount_injury <- insurance$claim_amount$injury
+insurance$claim_amount_property <- insurance$claim_amount$property
+insurance$claim_amount_vehicle <- insurance$claim_amount$vehicle
+# Process tartget variable suspicious_activity
+insurance$suspicious_activity <- replace(insurance$suspicious_activity, which(insurance$suspicious_activity == TRUE), 1)
+insurance$suspicious_activity <- factor(insurance$suspicious_activity)
+
+# Process of the variable months as customer (processed data renamed as months_cust2)
+index_frame <- insurance[, c("driver_age", "months_as_customer")]
+index_frame$years_as_customer <- index_frame$months_as_customer/12
+index_frame$check <- numeric(dim(index_frame)[1])
+# If the difference between the driver's age and the years_as_customer variable is bigger or 
+# equal than 16 the check value takes the value 1 and 0 otherwise.
+for (i in which(!is.na(index_frame$driver_age))) {
+  if ((index_frame$driver_age[i] - index_frame$years_as_customer[i]) >= 16) {
+    index_frame$check[i] <- 1
+  }
+}
+
+insurance$months_cust2[which(index_frame$check == 0)] <- NA
+
+# POLICY_TYPE to factor
+insurance$POLICYTYPE <- as.factor(insurance$POLICYTYPE)
+
+# POLICY_ISSUE_DATE to date (lubridate)
+insurance$POL_ISSUE_DATE <- as_date(insurance$POL_ISSUE_DATE, format  = "%d-%m-%Y")
