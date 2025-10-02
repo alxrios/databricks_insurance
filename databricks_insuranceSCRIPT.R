@@ -2,7 +2,8 @@
 # This script is intended for helping with the elaboration of the document databricks_insuranceRMKD. #
 ######################################################################################################
 
-# TO DO: Explore the repeated policy numbers in the dataset claims
+# TO DO: Explore the repeated policy numbers in the dataset claims.
+#        Substitute all the appearances of "expirity" by "expiry".
 
 # Necessary libraries
 library(ggplot2)
@@ -1361,13 +1362,318 @@ length(which(is.na(insurance$POL_EFF_DATE)))
 # This variable should be changed to date
 # POL_EFF_DATE should be older than POL_ISSUE_DATE
 
+test <- as_date(insurance$POL_EFF_DATE, format = "%d-%m-%Y")
+range(test)
+
+insurance$POL_EFF_DATE <- as_date(insurance$POL_EFF_DATE, format = "%d-%m-%Y")
+unique(year(insurance$POL_EFF_DATE))
+range(insurance$POL_EFF_DATE)
+range(year(insurance$POL_EFF_DATE))
+# Range of years is 1-31, it seems to have made the conversion badly
+year(insurance$POL_EFF_DATE[1])
+day(insurance$POL_EFF_DATE[1])
+month(insurance$POL_EFF_DATE[1])
+insurance$POL_EFF_DATE[1]
+insurance$POL_ISSUE_DATE[1]
+year(insurance$POL_ISSUE_DATE[1])
+range(year(insurance$POL_ISSUE_DATE))
+# The problem does not exist in the previous variable
+test <- as_date(insurance$POL_EFF_DATE, format = "%d-%m-%Y")
+range(test)
+range(year(test))
+range(day(test))
+range(month(test))
+# Now it seems ok
+range(year(insurance$POL_EFF_DATE))
+range(month(insurance$POL_EFF_DATE))
+range(day(insurance$POL_EFF_DATE))
+
+range(insurance$POL_ISSUE_DATE)
+range(insurance$POL_EFF_DATE)
+# The dates in this variable should always be older or at leat equal to the ones registered in
+# the variable POL_ISSUE_DATE, since first the contract is made and after that it starts to be
+# effective in the agreed date, however, here we can see that the variable takes values as older
+# as 2002 while the previous one only does it since 2015.
+#
+# Let's observe how many observations have years before 2015.
+table(year(insurance$POL_EFF_DATE))
+
+# Only 82 observations are out of the years range for the variable POLICY_ISSUE_DATE.
+
+# This variable should be changed to date.
+# POL_EXPIRY_DATE should be older than POL_ISSUE_DATE and POL_EFF_DATE
+#
+# Let's see how many observations have an older effective date
+check_frame <- data.frame(issue_date = insurance$POL_ISSUE_DATE, 
+                          effective_date = insurance$POL_EFF_DATE, 
+                          check_old = numeric(length(insurance$POL_EFF_DATE)))
+
+for (i in 1:dim(check_frame)[1]) {
+  if ((check_frame$effective_date[i] - check_frame$issue_date[i]) >= 0) {
+    check_frame$check_old[i] <- 1
+  }
+}
+
+range(check_frame$check_old)
+sum(check_frame$check_old)
+# 38193 observations agree
+dim(check_frame)[1] - sum(check_frame$check_old)
+# 2219 didn't do it
+
+# So this 2219 observations will be put as NA. Again we don't know where the error is, if in the
+# variable POLICY_ISSUE_DATE or in the variable POLICY_EFF_DATE, so maybe it's better to put
+# both of them to missing.
+
 # 15 POL_EXPIRY_DATE
 
 head(insurance$POL_EXPIRY_DATE)
 length(which(is.na(insurance$POL_EXPIRY_DATE)))
+# No NA's and also dates.
 
-# This variable should be changed to date.
-# POL_EXPIRY_DATE should be older than POL_ISSUE_DATE and POL_EFF_DATE
+# Let's test changing its type
+test <- as_date(insurance$POL_EXPIRY_DATE, format = "%d-%m-%Y")
+range(test)
+# Conversion seems ok and range also seems ok.
+insurance$POL_EXPIRY_DATE <- as_date(insurance$POL_EXPIRY_DATE, format = "%d-%m-%Y")
+range(insurance$POL_EXPIRY_DATE)
+table(year(insurance$POL_EXPIRY_DATE))
+
+# For being ok this variable should contain older dates than the previous variables, let's
+# test it.
+check_frame <- data.frame(issue = insurance$POL_ISSUE_DATE, effective = insurance$POL_EFF_DATE, 
+                          expirity = insurance$POL_EXPIRY_DATE, 
+                          check_isexp = numeric(dim(insurance)[1]),
+                          check_effexp = numeric(dim(insurance)[1]))
+
+for (i in 1:dim(check_frame)[1]) {
+  if ((check_frame$expirity[i] - check_frame$issue[i]) >= 0) {
+    check_frame$check_isexp[i] <- 1
+  }
+  if ((check_frame$expirity[i] - check_frame$effective[i]) >= 0) {
+    check_frame$check_effexp[i] <- 1
+  }
+}
+
+head(check_frame)
+sum(check_frame$check_isexp)
+sum(check_frame$check_effexp)
+
+# All the observations have an older expirity date than the effective date.
+dim(check_frame)[1] - sum(check_frame$check_isexp)
+# 26 observations have an older issue date than expirity date.
+# Are they the same ones than had an older effective date than issue date?
+
+check_frame$check_iseff <- numeric(dim(check_frame)[1])
+for (i in 1:dim(check_frame)[1]) {
+  if ((check_frame$effective[i] - check_frame$issue[i]) >= 0) {
+    check_frame$check_iseff[i] <- 1
+  }
+}
+
+sum(check_frame$check_iseff)
+dim(check_frame)[1] - sum(check_frame$check_iseff)
+
+check_frame$check_same <- numeric(dim(check_frame)[1])
+
+for (i in which(check_frame$check_isexp == 0)) {
+  if (check_frame$check_isexp[i] == check_frame$check_iseff[i]) {
+    check_frame$check_same[i] <- 1
+  }
+}
+
+head(check_frame$check_same)
+sum(check_frame$check_same)
+# Yes, the 26 observations also are incoherent in the other variables.
+
+# Now let's check the coherence of the three variables with the variable incident_date.
+
+check_frame$incident_date <- insurance$incident_date
+# Incident's date should be older than the issue date, because if the incident were before
+# the policy was issued, the incident would be no business of the insurance company.
+check_frame$iniss <- numeric(dim(check_frame)[1])
+# The ones that are NA in incident date will be also NA
+check_frame$iniss[which(is.na(check_frame$incident_date))] <- NA
+for (i in which(!is.na(check_frame$incident_date))) {
+  if ((check_frame$incident_date[i] - check_frame$issue[i]) >= 0) {
+    check_frame$iniss[i] <- 1
+  }
+}
+
+table(check_frame$iniss)
+# 14045 observations seems to have an older issue date than the incident.
+head(check_frame[which(check_frame$iniss == 0), c("issue", "incident_date")])
+
+# Effective date also should be older than the incident's date
+check_frame$effin <- numeric(dim(check_frame)[1])
+# All the observations with NA in the variable incident_date would have one for this variable
+check_frame$effin[which(is.na(check_frame$incident_date))] <- NA
+for (i in which(!is.na(check_frame$incident_date))) {
+  if ((check_frame$incident_date[i] - check_frame$effective[i]) >= 0) {
+    check_frame$effin[i] <- 1
+  }
+}
+
+length(which(is.na(check_frame$effin)))
+table(check_frame$effin)
+
+# 13946 observations aren't ok. But this is not so important since it's reasonable that the
+# policy was issued but not effective when the incident happened.
+
+# Also the incident date should be newer than the expiry date, this is not so relevant neither.
+
+check_frame$expin <- numeric(dim(check_frame)[1])
+# After calculation, the observations with a NA in incident_date also would have it in this
+# new variable.
+check_frame$expin[which(is.na(check_frame$incident_date))] <- NA
+for (i in which(!is.na(check_frame$incident_date))) {
+  if ((check_frame$expirity[i] - check_frame$incident_date[i]) >= 0) {
+    check_frame$expin[i] <- 1
+  }
+}
+
+length(which(is.na(check_frame$expin)))
+table(check_frame$expin)
+
+# 11162 observations have an older incident date than expiry date.
+
+# Now let's explore a little more about the distribution of these three check observations.
+
+select_index <- which(check_frame$iniss == 0)
+iniss <- check_frame$incident_date[select_index] - check_frame$issue[select_index]
+summary(iniss)
+3219/365
+# Minimum value observed is of 3219 days of negative difference between the incident date and
+# the policy issue date, this is near 9 years of difference.
+
+ggplot(data.frame(iniss), aes(x = as.numeric(iniss))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between incident and policy issue")
+
+# It's worrying that so many observations have a negative difference between 1000 and 2000 days.
+# It don't seems credible to have such data. The correct decission seems to put these observations
+# as NA.
+
+# Now let's check the distribution of effin
+
+select_index <- which(check_frame$effin == 0)
+effin <- check_frame$incident_date[select_index] - check_frame$effective[select_index]
+summary(effin)
+
+# Minimum registered is of -3226 days, this is, the incident ocurred almost nine years before
+# the policy was effective. Again, it's not credible to have such information in the database.
+
+ggplot(data.frame(effin), aes(x = as.numeric(effin))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between incident and policy effective dates")
+
+# Similar histogram as before.
+
+# Let's check now the distribution of expin
+
+select_index <- which(check_frame$expin == 0)
+expin <- check_frame$expirity[select_index] - check_frame$incident_date[select_index]
+summary(expin)
+
+# 50% of the selected observations have an expirity date of a year or more before the incident.
+
+ggplot(data.frame(expin), aes(x = as.numeric(expin))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between expiry and incident dates")
+
+# If the incident took place after the expiry date the company shouldn't worry about the 
+# claim legitimacy, since it would not be of her business.
+
+# Now let's create "synthetic variables" with these dates, but only use those that meet the 
+# minimum expected information. Let's use for that an index variable.
+
+# The variables we are going to create are:
+#           The difference between incident date and policy issue.
+#           The difference between incident date and policy expiry date.
+#           The difference between incident date and policy effective date.
+
+insurance$diff_inci_issue <- insurance$incident_date - insurance$POL_ISSUE_DATE
+insurance$diff_inci_expiry <- insurance$incident_date - insurance$POL_EXPIRY_DATE
+insurance$diff_inci_effective <- insurance$incident_date - insurance$POL_EFF_DATE
+
+# Let's ask the observations to complain with the following, expiry date should be older than
+# the issue date, expiry date should be older than effective date, effective date should be older
+# or equal than issue date and the incident date should be older or equal than the issue date.
+selection_index <- numeric(0)
+# na_index <- numeric(0)
+for (i in which(!is.na(insurance$incident_date))) {
+  if (sum(check_frame[i, c("check_isexp", "check_effexp", "check_iseff", "iniss")]) != 4) {
+    selection_index <- c(selection_index, i)
+  # } else {
+  #   na_index <- c(na_index, i)
+  # }
+  }
+}
+
+length(selection_index)
+dim(check_frame)[1] - length(selection_index)
+round(100*(length(selection_index)/dim(check_frame)[1]), 2)
+# 37% of the observations would be missing.
+
+# How many missing observations were previously in each variable?
+length(which(is.na(insurance$diff_inci_issue)))
+length(which(is.na(insurance$diff_inci_effective)))
+length(which(is.na(insurance$diff_inci_expiry)))
+
+# All three have the same number of NA's.
+
+# Let's put to missing the observations in selected index
+
+insurance[selection_index, c("diff_inci_issue", "diff_inci_expiry", "diff_inci_effective")] <- NA
+
+# 15.1 diff_inci_issue
+
+summary(insurance$diff_inci_issue)
+round(100*length(which(is.na(insurance$diff_inci_issue)))/dim(insurance)[1], 2)
+# 51% of the observations are missing
+
+ggplot(insurance, aes(x = diff_inci_issue)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between incident date and issue date")
+
+ggplot(insurance, aes(x = diff_inci_issue)) + geom_boxplot(color = "cornflowerblue") + coord_flip() +
+  labs(title = "Boxplot of variable diff_inci_issue", x = "age") + 
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+# 15.2 diff_inci_expiry
+
+summary(insurance$diff_inci_expiry)
+round(100*length(which(is.na(insurance$diff_inci_expiry)))/dim(insurance)[1], 2)
+
+# Same number of NA's.
+
+ggplot(insurance, aes(x = diff_inci_expiry)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between incident date and expiry date")
+
+ggplot(insurance, aes(x = diff_inci_expiry)) + geom_boxplot(color = "cornflowerblue") + coord_flip() +
+  labs(title = "Boxplot of variable diff_inci_expiry", x = "age") + 
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+# Still having some negative values, let's put them also as NA.
+
+insurance$diff_inci_expiry[which(insurance$diff_inci_expiry < 0)]
+
+# Only let's put as NA the extreme negative case.
+
+insurance$diff_inci_expiry[which(insurance$diff_inci_expiry < -1000)] <- NA
+
+# 15.3 diff_inci_effective
+
+summary(insurance$diff_inci_effective)
+# Same number of NA's, also has some negative values.
+
+ggplot(insurance, aes(x = diff_inci_effective)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between incident date and effective date")
+
+ggplot(insurance, aes(x = diff_inci_effective)) + geom_boxplot(color = "cornflowerblue") + coord_flip() +
+  labs(title = "Boxplot of variable diff_inci_effective", x = "age") + 
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
 
 # 16 BODY
 
@@ -1378,6 +1684,9 @@ length(which(is.na(insurance$BODY)))
 length(unique(insurance$BODY))
 # 75 different categories which should be reduced after changing "" to NA.
 # This variable should be changed to factor.
+sort(table(insurance$BODY), decreasing = T)
+
+# 1765 observations take the value "", these would be reclassified as missing.
 
 # 17 MAKE
 
