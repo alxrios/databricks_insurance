@@ -3,7 +3,7 @@
 ######################################################################################################
 
 # TO DO: Explore the repeated policy numbers in the dataset claims.
-#        Substitute all the appearances of "expirity" by "expiry".
+#        Substitute all the appearances of "expiry" by "expiry".
 
 # Necessary libraries
 library(ggplot2)
@@ -1441,15 +1441,15 @@ table(year(insurance$POL_EXPIRY_DATE))
 # For being ok this variable should contain older dates than the previous variables, let's
 # test it.
 check_frame <- data.frame(issue = insurance$POL_ISSUE_DATE, effective = insurance$POL_EFF_DATE, 
-                          expirity = insurance$POL_EXPIRY_DATE, 
+                          expiry = insurance$POL_EXPIRY_DATE, 
                           check_isexp = numeric(dim(insurance)[1]),
                           check_effexp = numeric(dim(insurance)[1]))
 
 for (i in 1:dim(check_frame)[1]) {
-  if ((check_frame$expirity[i] - check_frame$issue[i]) >= 0) {
+  if ((check_frame$expiry[i] - check_frame$issue[i]) >= 0) {
     check_frame$check_isexp[i] <- 1
   }
-  if ((check_frame$expirity[i] - check_frame$effective[i]) >= 0) {
+  if ((check_frame$expiry[i] - check_frame$effective[i]) >= 0) {
     check_frame$check_effexp[i] <- 1
   }
 }
@@ -1458,9 +1458,9 @@ head(check_frame)
 sum(check_frame$check_isexp)
 sum(check_frame$check_effexp)
 
-# All the observations have an older expirity date than the effective date.
+# All the observations have an older expiry date than the effective date.
 dim(check_frame)[1] - sum(check_frame$check_isexp)
-# 26 observations have an older issue date than expirity date.
+# 26 observations have an older issue date than expiry date.
 # Are they the same ones than had an older effective date than issue date?
 
 check_frame$check_iseff <- numeric(dim(check_frame)[1])
@@ -1526,7 +1526,7 @@ check_frame$expin <- numeric(dim(check_frame)[1])
 # new variable.
 check_frame$expin[which(is.na(check_frame$incident_date))] <- NA
 for (i in which(!is.na(check_frame$incident_date))) {
-  if ((check_frame$expirity[i] - check_frame$incident_date[i]) >= 0) {
+  if ((check_frame$expiry[i] - check_frame$incident_date[i]) >= 0) {
     check_frame$expin[i] <- 1
   }
 }
@@ -1571,10 +1571,10 @@ ggplot(data.frame(effin), aes(x = as.numeric(effin))) +
 # Let's check now the distribution of expin
 
 select_index <- which(check_frame$expin == 0)
-expin <- check_frame$expirity[select_index] - check_frame$incident_date[select_index]
+expin <- check_frame$expiry[select_index] - check_frame$incident_date[select_index]
 summary(expin)
 
-# 50% of the selected observations have an expirity date of a year or more before the incident.
+# 50% of the selected observations have an expiry date of a year or more before the incident.
 
 ggplot(data.frame(expin), aes(x = as.numeric(expin))) +
   geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
