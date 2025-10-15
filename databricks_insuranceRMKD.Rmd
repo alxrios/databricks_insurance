@@ -1105,3 +1105,1284 @@ ggplot(data = plot_frame, aes(x = year, y = frequency)) +
 ```
 
 The years that register more dates are 2015 and 2016 which altogether accumulate the 69.28% of the observations.
+
+#### **14 POL_EFF_DATE**
+
+```{r}
+head(insurance$POL_EFF_DATE)
+length(which(is.na(insurance$POL_EFF_DATE)))
+```
+Same case as before, no NA's and a variable which contains dates, so let's change its type.
+```{r}
+insurance$POL_EFF_DATE <- as_date(insurance$POL_EFF_DATE, format = "%d-%m-%Y")
+
+range(insurance$POL_ISSUE_DATE)
+range(insurance$POL_EFF_DATE)
+```
+The dates in this variable should always be older or at leat equal to the ones registered in the variable POL_ISSUE_DATE, since first the contract is made and after that it starts to be effective in the agreed date, however, here we can see that the variable takes values as older as 2002 while the previous one only does it since 2015.
+
+Let's observe how many observations have years before 2015.
+```{r}
+table(year(insurance$POL_EFF_DATE))
+```
+Only 82 observations are out of the years range for the variable POLICY_ISSUE_DATE.
+
+#### **15 POL_EXPIRY_DATE**
+
+```{r}
+head(insurance$POL_EXPIRY_DATE)
+length(which(is.na(insurance$POL_EXPIRY_DATE)))
+```
+No NA's, the variable also contain dates.
+
+```{r}
+insurance$POL_EXPIRY_DATE <- as_date(insurance$POL_EXPIRY_DATE, format = "%d-%m-%Y")
+```
+
+For being ok this variable should contain older dates than the previous variables, let's test it.
+
+```{r}
+check_frame <- data.frame(issue = insurance$POL_ISSUE_DATE, effective = insurance$POL_EFF_DATE, 
+                          expiry = insurance$POL_EXPIRY_DATE, 
+                          check_isexp = numeric(dim(insurance)[1]),
+                          check_effexp = numeric(dim(insurance)[1]))
+
+for (i in 1:dim(check_frame)[1]) {
+  if ((check_frame$expiry[i] - check_frame$issue[i]) >= 0) {
+    check_frame$check_isexp[i] <- 1
+  }
+  if ((check_frame$expiry[i] - check_frame$effective[i]) >= 0) {
+    check_frame$check_effexp[i] <- 1
+  }
+}
+
+head(check_frame)
+sum(check_frame$check_effexp)
+```
+All the observations have an older expiry date than the effective date.
+```{r}
+dim(check_frame)[1] - sum(check_frame$check_isexp)
+```
+26 observations have an older issue date than expiry date.
+
+Now let's check the coherence of the three variables with the variable incident_date.
+
+```{r}
+check_frame$incident_date <- insurance$incident_date
+# Incident's date should be older than the issue date, because if the incident were before
+# the policy was issued, the incident would be no business of the insurance company.
+check_frame$iniss <- numeric(dim(check_frame)[1])
+# The ones that are NA in incident date will be also NA
+check_frame$iniss[which(is.na(check_frame$incident_date))] <- NA
+for (i in which(!is.na(check_frame$incident_date))) {
+  if ((check_frame$incident_date[i] - check_frame$issue[i]) >= 0) {
+    check_frame$iniss[i] <- 1
+  }
+}
+
+table(check_frame$iniss)
+```
+14045 observations seems to have an older issue date than the incident.
+
+Effective date also should be older than the incident's date.
+
+```{r}
+check_frame$effin <- numeric(dim(check_frame)[1])
+# All the observations with NA in the variable incident_date would have one for this variable
+check_frame$effin[which(is.na(check_frame$incident_date))] <- NA
+for (i in which(!is.na(check_frame$incident_date))) {
+  if ((check_frame$incident_date[i] - check_frame$effective[i]) >= 0) {
+    check_frame$effin[i] <- 1
+  }
+}
+
+length(which(is.na(check_frame$effin)))
+table(check_frame$effin)
+```
+13946 observations aren't ok. But this is not so important since it's reasonable that the policy was issued but not effective when the incident happened.
+
+Also the incident date should be newer than the expiry date, this is not so relevant neither.
+```{r}
+check_frame$expin <- numeric(dim(check_frame)[1])
+# After calculation, the observations with a NA in incident_date also would have it in this
+# new variable.
+check_frame$expin[which(is.na(check_frame$incident_date))] <- NA
+for (i in which(!is.na(check_frame$incident_date))) {
+  if ((check_frame$expiry[i] - check_frame$incident_date[i]) >= 0) {
+    check_frame$expin[i] <- 1
+  }
+}
+
+length(which(is.na(check_frame$expin)))
+table(check_frame$expin)
+```
+11162 observations have an older incident date than expiry date.
+
+Now let's explore a little more about the distribution of these three check observations.
+```{r}
+select_index <- which(check_frame$iniss == 0)
+iniss <- check_frame$incident_date[select_index] - check_frame$issue[select_index]
+summary(iniss)
+```
+Minimum value observed is of 3219 days of negative difference between the incident date and the policy issue date, this is near 9 years of difference.
+
+```{r}
+ggplot(data.frame(iniss), aes(x = as.numeric(iniss))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between incident and policy issue")
+```
+
+It's worrying that so many observations have a negative difference between 1000 and 2000 days. It don't seems credible to have such data. The correct decission seems to put these observations as NA.
+
+Now let's check the distribution of effin.
+
+```{r}
+select_index <- which(check_frame$effin == 0)
+effin <- check_frame$incident_date[select_index] - check_frame$effective[select_index]
+summary(effin)
+```
+Minimum registered is of -3226 days, this is, the incident ocurred almost nine years before the policy was effective. Again, it's not credible to have such information in the database.
+```{r}
+ggplot(data.frame(effin), aes(x = as.numeric(effin))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between incident and policy effective dates")
+```
+
+Similar histogram as before.
+
+Let's check now the distribution of expin.
+```{r}
+select_index <- which(check_frame$expin == 0)
+expin <- check_frame$expiry[select_index] - check_frame$incident_date[select_index]
+summary(expin)
+```
+50% of the selected observations have an expiry date of a year or more before the incident.
+
+```{r}
+ggplot(data.frame(expin), aes(x = as.numeric(expin))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between expiry and incident dates")
+```
+
+If the incident took place after the expiry date the company shouldn't worry about the claim legitimacy, since it would not be of her business.
+
+Now let's create "synthetic variables" with these dates, but only use those that meet the minimum coherence expected about the information. Let's use for that an index variable.
+
+The variables we are going to create are:
+           The difference between incident date and policy issue.
+           The difference between incident date and policy expiry date.
+           The difference between incident date and policy effective date.
+
+```{r}
+insurance$diff_inci_issue <- insurance$incident_date - insurance$POL_ISSUE_DATE
+insurance$diff_inci_expiry <- insurance$incident_date - insurance$POL_EXPIRY_DATE
+insurance$diff_inci_effective <- insurance$incident_date - insurance$POL_EFF_DATE
+```
+---
+title: "**DATABRICKS INSURANCE**"
+output:
+   html_document:
+    toc: yes
+---
+
+
+```{r, out.width = "600px", echo = FALSE}
+knitr::include_graphics("https://i.imgur.com/dDVDTeP.jpeg")
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### **1 Main objective**
+
+In this notebook we're going to explore a car insurance dataset with the objective of explore the usefulness of some machine learning algorithms in the aid of fraud detection.
+
+### **2 Necessary libraries**
+
+Those are the libraries that are necessary to execute all the codes in this notebook.
+
+```{r}
+library(jsonlite)
+library(ggplot2)
+library(lubridate)
+```
+
+### **3 Data load**
+
+For this notebook, we're going to merge two datasets obtained from the Databricks' Github repository.
+
+```{r}
+policies <- read.csv("https://raw.githubusercontent.com/databricks-industry-solutions/dlt-insurance-claims/refs/heads/main/data/samples/mysql/policies.csv")
+claims <- fromJSON("https://raw.githubusercontent.com/databricks-industry-solutions/dlt-insurance-claims/refs/heads/main/data/samples/mongodb/claims.json")
+```
+### **4 Data exploration**
+```{r}
+dim(policies)
+dim(claims)
+```
+We have that the dataset "policies" contain 227484 rows and 20 columns, while the dataset "claims" has 50642 rows and 10 columns. Let's see if they can have variables in common.
+```{r}
+names(policies)
+names(claims)
+```
+Exploring the variable names, we can see that they can have in common the variables "POLICY_NO" from the dataset policies and the variable "policy_no" from the dataset claims. Let's check if they have observations in common in this variables.
+```{r}
+length(unique(claims$policy_no))
+length(unique(policies$POLICY_NO))
+```
+The number of unique values in the dataset claims is of 45343, so we have 5299 policy numbers that are repeated. Meanwhile in the dataset policies we have 227463 unique values, so there 21 observations are repeated. 
+
+Let's now test if the observations with the same policy numbers in the dataset claims have also the same values for the other variables.
+```{r}
+head(sort(table(claims$policy_no), decreasing = T))
+```
+Let's use the policy number 102122085 for the test, since it's the one that appears more times in the dataset.
+```{r}
+claims[which(claims$policy_no == "102122085"), ]
+```
+As can be seen the values aren't constant for all the columns through the five rows with repeated policy numbers.
+
+Let's explore the case of the dataset policies now.
+```{r}
+head(sort(table(policies$POLICY_NO), decreasing = TRUE), 9)
+```
+15 observations don't have any policy number associated. Let's check the values the other columns take for this observations.
+```{r}
+policies[which(policies$POLICY_NO == ""), ]
+```
+Many columns are empty or take the value NA, so we're going to omit these observations before merging both datasets.
+
+Since then only 7 repeated policies remain, this time let's observe visually if these seven policies cotain the same values for each observation.
+```{r}
+# Let's store the seven policy numbers in a variable
+duplicated_policies <- names(head(sort(table(policies$POLICY_NO), decreasing = TRUE), 8)[-1])
+
+na_to_char <- function(input_vector) {
+  # This function recieves a row of a data.frame object and if it contains NA values, it returns
+  # the same vector with the NA's also as characters.
+  # Input by the user is assumed to be correct.
+  if (length(input_vector[which(is.na(input_vector))]) > 0) {
+    input_vector[which(is.na(input_vector))] <- "NA"
+  }
+  return(input_vector)
+}
+
+checkDiscrepancies <- function(p_numbers) {
+  # Input: p_numbers, a character vector with the policy numbers to check.
+  # If both rows don't have the same values for each column, a data.frame object
+  # with the content of the columns that doesn't match is printed in the console.
+  
+  for (i in p_numbers) {
+    check <- policies[which(policies$POLICY_NO == i), ]
+    check[1, ] <- na_to_char(check[1, ])
+    check[2, ] <- na_to_char(check[2, ])
+    discrepancies <- which(check[1, ] != check[2, ])
+    if (length(discrepancies) > 0) {
+      cat("Discrepancies for the policy number ", i, " between the two rows found at the variables:\n")
+      print("---------------------------------------------------------------------------------------")
+      auxiliar_frame <- data.frame(variable_name = colnames(check[discrepancies]), 
+                                   row_one_values = unlist(check[1, discrepancies]), 
+                                   row_two_values = unlist(check[2, discrepancies]))
+      rownames(auxiliar_frame) <- NULL
+      print(auxiliar_frame)
+      print("---------------------------------------------------------------------------------------")
+    } else {
+      cat("No discrepancies were found for the policy with the number: ", i)
+    }
+  }
+}
+
+checkDiscrepancies(duplicated_policies)
+```
+
+So for simplicity let's remove all the observations with repeated policy numbers before merging both datasets.
+
+Let's store first the policy numbers with repetitions
+```{r}
+duplicated_pol_claims <- sort(table(claims$policy_no), decreasing = T)
+length(duplicated_pol_claims[which(duplicated_pol_claims > 1)])
+```
+So 4928 observations should be removed from this dataset.
+```{r}
+duplicated_pol_claims <- duplicated_pol_claims[which(duplicated_pol_claims > 1)]
+duplicated_pol_claims <- names(duplicated_pol_claims)
+```
+We need to store the row indexes of the observations to drop from the dataset.
+```{r}
+drop_index <- numeric()
+for (i in duplicated_pol_claims) {
+  drop_index <- c(drop_index, which(claims$policy_no == i))
+}
+```
+Let's add also the duplicated ones in the dataset policies.
+```{r}
+for (i in duplicated_policies) {
+  drop_index <- c(drop_index, which(claims$policy_no == i))
+}
+```
+Which length will have the resulting dataset after the merge without duplicated policies?
+```{r}
+future_length <- 0
+for (i in claims[-drop_index, "policy_no"]) {
+  check <- which(policies$POLICY_NO == i)
+  if (length(check)) {
+    future_length <- future_length + 1
+  }
+}
+
+print(future_length)
+```
+So the resulting dataset will have 40412 rows.
+Let's proceed now with the merge.`
+```{r}
+insurance <- merge(claims[-drop_index, ], policies, by.x = c("policy_no"), 
+                    by.y = c("POLICY_NO"), all.x = T)
+```
+Let's check if we have the predicted length for the rows
+```{r}
+dim(insurance)
+```
+It looks that there are two extra rows, let's explore if this is caused because of observations
+with NA values.
+```{r}
+which(is.na(insurance$policy_no))
+```
+Yes, there are two observations with NA as their policy number.
+```{r}
+print(insurance[which(is.na(insurance$policy_no)), ])
+```
+Since there are NA values in the majority of the columns for this observations, let's just delete
+them form the dataset.
+```{r}
+insurance <- insurance[-which(is.na(insurance$policy_no)), ]
+```
+```{r}
+dim(insurance)[2]
+```
+The dataset has 29 different columns. Let's now explore them one by one, so we can know a little more about them.
+
+#### **1 Variable: policy_no**
+
+```{r}
+head(insurance$policy_no)
+length(unique(insurance$policy_no))
+```
+As has been seen before, this variable contains the unique policy numbers in string format. This variable looks like useless for modelling or prediction purposes, so we're not going to spend more time on it.
+
+#### **2 Variable: claim_no**
+```{r}
+head(insurance$claim_no)
+length(unique(insurance$claim_no))
+```
+Here we have again a variable that contains an unique code in string format. So this variable also wouldn't be of any use.
+
+#### **3 Variable: claim_datetime**
+
+```{r}
+head(insurance$claim_datetime)
+typeof(insurance$claim_datetime)
+```
+This time we have a variable that contains dates in character format, so let's search 
+for a more appropriate data type for them.
+First let's convert from character to a date-time object.
+```{r}
+insurance$claim_datetime <- as_datetime(insurance$claim_datetime)
+```
+And now let's store the date in one variable and the hour of the claim in another.
+Also let's store the day of the week associated to the claim so it could be of any help after.
+```{r}
+insurance$claim_date <- as_date(insurance$claim_datetime)
+insurance$claim_hour <- hour(insurance$claim_datetime)
+insurance$claim_wday <- wday(insurance$claim_datetime, week_start = 1)
+# Week_start option is used so Monday appear as the first day of week
+range(insurance$claim_date)
+length(unique(insurance$claim_date))
+```
+The range of dates of the observations goes from february of 2015 to the last day of 2020.
+There are only 1633 different dates for the 40412 observations in the dataset.
+Let's observe if all the years are represented equally.
+```{r}
+# Let's create an auxiliar data.frame for using it with the ggplot function
+plot_frame <- data.frame(year = sort(unique(year(insurance$claim_date))))
+plot_frame$frequencies <- unname(table(year(insurance$claim_date)))
+
+ggplot(data = plot_frame, aes(x = year, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Observations for each year")
+```
+
+As can be seen here are observations from 2015 to 2020. The years with more registered 
+cases are 2016 and 2017 which accumulate the 35% and the 26% of the observations respectivelly.
+```{r}
+sort(unique(insurance$claim_hour))
+length(unique(insurance$claim_hour))
+```
+There aren't observations for every hour, specifically the hours 24, 2 and 3 are lacking without
+any observation.
+```{r}
+plot_frame <- data.frame(hour = names(table(insurance$claim_hour)))
+plot_frame$rel_freqs <- round(100*table(insurance$claim_hour)/length(insurance$claim_hour), 3)
+plot_frame$hour <- as.numeric(plot_frame$hour)
+
+ggplot(data = plot_frame, aes(x = hour, y = rel_freqs)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative frequencies for each hour")
+```
+
+Here observations concentrate on the interval from the 8 a.m. to the 7 p.m. It looks that this coincides with the usual commercial hours. So maybe the majority of people waits to put the claim in these hours and also the majority of incidets occur durying day time.
+```{r}
+plot_frame <- data.frame(day = 1:7)
+plot_frame$rel_freqs <- as.vector(round(100*table(insurance$claim_wday)/length(insurance$claim_wday), 3))
+
+
+ggplot(data = plot_frame, aes(x = day, y = rel_freqs)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative frequencies for each week day")
+```
+
+Surprisingly the day with the most claims registered is the Sunday with the 18.660% of them.
+The days with lesser claims are Friday and Saturday.
+
+#### **4 Variable: incident**
+
+```{r}
+head(insurance$incident)
+```
+We can see that this variable contains four variables, so let's add each one as a new column to the dataset insurance.
+```{r}
+insurance$incident_date <- insurance$incident$date
+insurance$incident_hour <- insurance$incident$hour
+insurance$incident_type <- insurance$incident$type
+insurance$incident_severity <- insurance$incident$severity
+```
+##### **4.1 variable: incident_date**
+
+Since this variable contains dates, let's change its format.
+```{r}
+insurance$incident_date <- as_date(insurance$incident_date, format = "%d-%m-%Y")
+range(insurance$incident_date)
+```
+We can see that the range of the incidents don't coincide with the one of the claims.
+```{r}
+plot_frame <- data.frame(year = names(table(year(insurance$incident_date))), 
+                         frequencies = as.vector(unname(table(year(insurance$incident_date)))))
+
+ggplot(data = plot_frame, aes(x = year, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incidents registered for each year")
+```
+
+2016 is again the year with more observations. But this time we have registered incidents as older as 2010, while older claims were of 2015. Let's explore the years of the claims obtained for the incidents older than 2015.
+
+```{r}
+subset_incidents <- insurance[which(year(insurance$incident_date) < 2015), c("claim_date", "incident_date")]
+dim(subset_incidents)
+head(subset_incidents)
+```
+Let's plot the claim's years for this subset.
+```{r}
+plot_frame <- data.frame(year = as.numeric(names(table(year(subset_incidents$claim_date)))))
+plot_frame$frequencies <- as.vector(table(year(subset_incidents$claim_date)))
+
+ggplot(data = plot_frame, aes(x = year, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Claim year for incidents registered before 2015")
+```
+
+The majority of claims are registered in 2015. Some rare cases are registered in as far as 2020.
+
+Let's check now if all the claims were put after or the same day of the incident, since to have incidents registered after the claim date will not be reasonable and will indicate some kind problem with the data.
+```{r}
+dates_check_frame <- insurance[, c("claim_date", "incident_date")]
+dates_check_frame$differenceDays <- dates_check_frame$claim_date - dates_check_frame$incident_date
+range(dates_check_frame$differenceDays)
+length(which(dates_check_frame$differenceDays < 0))
+```
+5456 incident dates are older than the claims.
+```{r}
+# Histogram for the observations with a less than zero difference.
+ggplot(dates_check_frame[which(dates_check_frame$differenceDays < 0), ], aes(x = as.numeric(differenceDays))) +
+  geom_histogram(color="darkblue", fill="lightblue", bins = 15) + xlab("days") +
+  ggtitle("Days of difference between claim and incident dates")
+
+summary(dates_check_frame$differenceDays[which(dates_check_frame$differenceDays < 0)])
+```
+
+The maximum negative difference found between the claim date and the date of the incident is of 365 days, id est, the claim would have been made one year before the incident. Since these information can't be correct and we don't have access to more information about the dates, the more reasonable thing to do seems to put the dates of both columns which return a negative difference as NA.
+```{r}
+insurance$claim_date[which(dates_check_frame$differenceDays < 0)] <- NA
+insurance$incident_date[which(dates_check_frame$differenceDays < 0)] <- NA
+```
+Let's check again the differences to ensure any negative difference remain.
+```{r}
+dates_check_frame <- insurance[, c("claim_date", "incident_date")]
+dates_check_frame$differenceDays <- dates_check_frame$claim_date - dates_check_frame$incident_date
+range(dates_check_frame$differenceDays, na.rm = T)
+```
+Ok, now there aren't negative differences.
+```{r}
+# difference between claim date and incident date in days
+insurance$diff_ci_days <- insurance$claim_date - insurance$incident_date
+range(insurance$diff_ci_days, na.rm = T)
+```
+```{r}
+# Histogram for the differences between the claim date and the incident date.
+ggplot(insurance[which(!is.na(insurance$diff_ci_days)), ], aes(x = as.numeric(diff_ci_days))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between claim and incident dates")
+
+summary(insurance$diff_ci_days)
+head(sort(table(insurance$diff_ci_days), decreasing = T), 10)
+```
+
+We can see that the 25% of the claims are done in the 7 next days to the incident occurrence.
+The 50% are put in the 43 next days to the incident date. The 75% of them are put in the 5 next months to the incident and the maximum of days registered is of 2314 that is approximately more than 6 years which looks like a weird quantity of time waiting to put a claim, but, for example, we could think that in this case the person was severely damaged and couldn't do it before that time. So maybe to know if this information is possible we would need to talk with some expert in insurance policies. Lacking more information, we're gonna take it as a valid value.
+
+As we did with the claim dates, let's store the day of week in which the incident was produced.
+Maybe some days are choose more than others to fake incidents.
+```{r}
+insurance$incident_wday <- wday(insurance$incident_date, week_start = 1)
+
+plot_frame <- data.frame(day = names(table(insurance$incident_wday)))
+plot_frame$rel_freq <- as.vector(100*round(table(insurance$incident_wday)/length(insurance$incident_wday), 3))
+
+ggplot(data = plot_frame, aes(x = day, y = rel_freq)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative frequencies for each week day.")
+```
+
+As in the case of the claims, Friday and Saturday appear as the days with less incidents, and sundays as the day with more.
+
+##### **4.2 variable: incident_hour**
+
+```{r}
+length(which(is.na(insurance$incident_hour)))
+```
+The variable has no NA values.
+```{r}
+plot_frame <- data.frame(hour = 0:23)
+plot_frame$rel_freq <- as.vector(round(100*table(insurance$incident_hour)/length(insurance$incident_hour), 2))
+
+ggplot(data = plot_frame, aes(x = hour, y = rel_freq)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative frequencies for incident hour.")
+
+sort(round(100*table(insurance$incident_hour)/length(insurance$incident_hour), 2), decreasing = T)
+```
+
+There are incidents registered for any of the 24 hours. None of the hours exceeds to accumulate the 5.44% of the observations. The one that accumulates more observations is 5 p.m. followed by 3 a.m., 12 a.m. and 11 p.m.. It's not surprising that the hour with more incidents is 5 p.m. since it coincides with the end of the work hours for the most people and then when more cars are on the streets, but it seems quite surprising for the late hours to accumulate almost as many incidents. This could be associated to nightlife, so if we see that weekend days accumulate the majority of incidents for these hours, we could give more strength to this hypothesis, let's take a look at it.
+
+```{r}
+# Checking the weekdays for the incidents happended at 12:am, 3 a.m. and 23 p.m.
+subset_incidents <- numeric()
+for (i in c(3, 0, 23)) {
+  subset_incidents <- c(subset_incidents, which(insurance$incident_hour == i))
+}
+
+# Let's check the subset it's the corrrect
+unique(insurance$incident_hour[subset_incidents])
+
+plot_frame <- data.frame(day = names(table(insurance$incident_wday[subset_incidents])))
+plot_frame$frequencies <- as.vector(table(insurance$incident_wday[subset_incidents]))
+
+ggplot(data = plot_frame, aes(x = day, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Day of week frequenciess for incidents occurred at 3 a.m.,\n 12 a.m. or 23 p.m.")
+```
+
+The distribution of days looks the same like the one for the whole set of hours.
+
+##### **4.3 incident_type**
+
+```{r}
+length(which(is.na(insurance$incident_type)))
+```
+There are no NA values present in this variable.
+```{r}
+unique(insurance$incident_type)
+```
+It contains four different values, which are categorical, so let's change their type from character to factor.
+```{r}
+insurance$incident_type <- factor(insurance$incident_type)
+```
+Now let's plot its frequencies.
+```{r}
+plot_frame <- data.frame(type = names(table(insurance$incident_type)))
+plot_frame$frequencies <- as.vector(table(insurance$incident_type))
+plot_frame$bar_labels <- as.vector(round(100*table(insurance$incident_type)/length(insurance$incident_type), 2))
+
+ggplot(data = plot_frame, aes(x = type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incident type frequencies.") +
+  geom_text(aes(label = scales::percent(bar_labels, scale = 1)), vjust = 1.3)
+```
+
+Multi-vehicle collision and single vehicle collision categories occupy more than the 80% of the total observations. Only 9.4% of the observations in the dataset are classified as vehicle theft and 8.3% are classified as parked car, we understand that this means like incidents that took place while the vehicle was stationed.
+
+##### **4.4 incident_severity**
+
+```{r}
+length(which(is.na(insurance$incident_severity)))
+```
+No NA's present in this variable.
+```{r}
+unique(insurance$incident_severity)
+```
+Only four different values. This variable it's an ordered categorical, so let's change its type to an ordered factor.
+```{r}
+insurance$incident_severity <- factor(insurance$incident_severity, 
+                                      levels = c("Trivial Damage", "Minor Damage", 
+                                                 "Major Damage", "Total Loss"), 
+                                      ordered = T)
+```
+Now let's plot the frequencies for each category to see structure of the variable.
+```{r}
+frequencies <- round(100*table(insurance$incident_severity)/dim(insurance)[1], 2)
+plot_frame <- data.frame(severity = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = severity, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Severity of the incident frequencies.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4)
+
+```
+
+Surprisingly, trivial damage is the category with less observations, this can be due to the fact that most policies don't start to cover car's damage until the price is above a certain threshold. The category with most observations is minor damage with the 35.12% of them, and the categories major damage and total loss are almost equal with near the 28% of the observations for each one.
+
+#### **5 collision**
+
+```{r}
+head(insurance$collision)
+```
+This variable contains two, so let's add two new columns to the dataset with their information.
+```{r}
+insurance$collision_type <- insurance$collision$type
+insurance$vehicles_involved <- insurance$collision$number_of_vehicles_involved
+```
+
+##### **5.1 collision_type**
+
+```{r}
+length(which(is.na(insurance$collision_type)))
+```
+This variable contains 7134 missing values, this is a 17.65% over the total number of rows.
+```{r}
+unique(insurance$collision_type)
+```
+It contains only three unique values, apart from the missing ones. Since it's a categorical variable, let's transform its type into an unordered factor.
+```{r}
+insurance$collision_type <- factor(insurance$collision_type)
+```
+Now let's plot the frequencies for each category.
+
+```{r}
+frequencies <- round(100*table(insurance$collision_type)/dim(insurance)[1], 2)
+plot_frame <- data.frame(collision_type = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = collision_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of the types of collision.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4)
+```
+
+We can see that the most observed type of collision is rear collision with almost the 29% of the observations followed by side collision with the 28%. Lastly front collision occupy near the 26% of the rows.
+
+To try to know more about the missing observations for this variable, let's analyze the values they take for the variable incident_type.
+
+```{r}
+subset_incidents <- insurance$incident_type[which(is.na(insurance$collision_type))]
+frequencies <- round(100*table(subset_incidents)/length(subset_incidents), 2)
+plot_frame <- data.frame(incident_type = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = incident_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Incident type frequencies for the observations with collision type missing.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4)
+```
+
+Looks pretty similar to the distribution of the rest of the observations.
+In this case it could make sense to think that the missing observations are not just missing, but also cases were the collision it's just unkown, like in a case of vandalism were the car was parked in the street or a heavy impact in which the car is so damaged that it's impossible to know the side of the collision or because it was heavy impacted in several ways. So this time, let's try to put all the missing observations into a new category that will be named as 'unknown'.
+
+```{r}
+# Let's add again the content into a new column.
+insurance$collision_type <- insurance$collision$type
+insurance$collision_type <- replace(insurance$collision_type, which(is.na(insurance$collision_type)), "unknown")
+insurance$collision_type <- factor(insurance$collision_type)
+head(insurance$collision_type)
+
+frequencies <- round(100*table(insurance$collision_type)/dim(insurance)[1], 2)
+plot_frame <- data.frame(collision_type = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = collision_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of the types of collision.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.4) 
+```
+
+##### **5.2 vehicles_involved**
+
+```{r}
+length(which(is.na(insurance$vehicles_involved)))
+```
+There are no NA values in this variable.
+```{r}
+unique(insurance$vehicles_involved)
+```
+Surprisingly, this variable only takes two values one, and four. 
+```{r}
+round(100*table(insurance$vehicles_involved)/length(insurance$vehicles_involved), 2)
+```
+One appears almost in the 58% o the observations while 4 in the 42%.
+Let's now observe the values the variable incident_type takes for each number of vehicles involved.
+
+```{r}
+frequencies1 <- table(insurance$incident_type[which(insurance$vehicles_involved == 1)])
+frequencies2 <- table(insurance$incident_type[which(insurance$vehicles_involved == 4)])
+frequencies1 <- round(100*frequencies1/sum(frequencies1))
+frequencies2 <- round(100*frequencies2/sum(frequencies2))
+plot_frame <- data.frame(incident_type = c(names(frequencies1), names(frequencies2)))
+plot_frame$frequencies <- c(as.vector(frequencies1), as.vector(frequencies2))
+plot_frame$n_vehicles <- c(rep(1, 4), rep(4, 4))
+
+ggplot(data = plot_frame, aes(x = incident_type, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of incident types by number of vehicles involved.") +
+  facet_wrap(~n_vehicles) +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), hjust = 0.75) +
+  coord_flip()
+```
+
+We can see that all the incidents when the number of vehicles involved is 4 are multiple vehicle collisions, as would be reasonable to expect, and when the number of vehicles involved is 1, the category most observed is single vehicle collision.
+
+#### **6 driver**
+
+```{r}
+head(insurance$driver)
+```
+Again we have a variable that contains others, so let's add a column for each one of them.
+```{r}
+insurance$driver_age <- insurance$driver$age
+insurance$insured_rel <- insurance$driver$insured_relationship
+insurance$license_issue_d <- insurance$driver$license_issue_date
+```
+
+##### **6.1 driver_age**
+
+```{r}
+length(which(is.na(insurance$driver_age)))
+```
+950 missing values in the variable.
+```{r}
+ggplot(insurance, aes(x = driver_age)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("age") +
+  ggtitle("Distribution of driver's age")
+
+summary(insurance$driver_age)
+```
+There seems to be several problems with this variable, first it looks that some ages take a negative value, second, as can be observed in the histogram, many observations seem to have a value of zero or at least near it, and third, the maximum age registered of 121 seems to high for a driver. Let's start taking a look to how many negative values are in the variable.
+```{r}
+length(which(insurance$driver_age < 0))
+```
+Only six observations take negative values, so let's see which values they take.
+```{r}
+insurance$driver_age[which(insurance$driver_age < 0)]
+```
+All are ages which if even they were positive they seem impossible for a driver to have. So, let's just remove them by changing their value to NA.
+```{r}
+insurance$driver_age[which(insurance$driver_age < 0)] <- NA
+```
+Now let's take a look to how many observations take the value zero.
+```{r}
+length(which(insurance$driver_age == 0))
+```
+6913 observations take the value zero for the driver's age, so changing this values to missing will increase substantially the quantity of missing values in the dataset, but we have no alternative, since zero is obviouslly a non-valid value for the variable.
+```{r}
+insurance$driver_age[which(insurance$driver_age == 0)] <- NA
+insurance$driver_age[which(insurance$driver_age < 16)]
+```
+Since the minimum age for having a driver license in the state of New York is of 15 for a junior driving license, let's put the observation that has a value of 14 as missing and of course the ones that take the value 1, since it don't has any sense.
+```{r}
+insurance$driver_age[which(insurance$driver_age < 15)] <- NA
+```
+Let's inspect the distribution of the variable again.
+```{r}
+ggplot(insurance, aes(x = driver_age)) + geom_boxplot(color = "cornflowerblue") + coord_flip() +
+  labs(title = "Boxplot of variable driver_age", x = "age") + 
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+```
+
+In the boxplot for this variable we can see that many outliers are detected. Let's first inspect the more extreme, for example, it feels like hardly credible that a person of 100 years or more could still driving. Let's see how many of this obsevations are in the dataset.
+```{r}
+# How many observations have 100 years or more?
+length(which(insurance$driver_age >= 100))
+```
+There are 159 observations that have 100 or more years of age. Let's now inspect their distribution.
+```{r}
+summary(insurance$driver_age[which(insurance$driver_age >= 100)])
+```
+The minimum age obtained is of 116 and the maximum is of 121, definetly they don't look like possible values for a driver's age, so let's put them also as missing.
+```{r}
+insurance$driver_age[which(insurance$driver_age >= 100)] <- NA
+```
+Let's obtain again the new boxplot.
+```{r}
+ggplot(insurance, aes(x = driver_age)) + geom_boxplot(color = "cornflowerblue") + coord_flip() +
+  labs(title = "Boxplot of variable driver_age after adding new missing values.", x = "age") + 
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+summary(insurance$driver_age)
+```
+Now with a maximum observed age of 96 years the distribution seems more credible than before.
+Possible outliers still being plotted in the boxplot, so let's just take a look to their distribution.
+```{r}
+u_whisker <- 41 + sum(summary(insurance$driver_age)[c(5, 2)]%*%matrix(c(1, 0, 0, -1), nrow = 2))*1.5
+outliers <- insurance$driver_age[which(insurance$driver_age > u_whisker)]
+length(outliers)
+
+ggplot(data.frame(outliers), aes(x = outliers)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("age") +
+  ggtitle("Distribution of outlier observations for the variable driver age")
+
+summary(outliers)
+```
+Now it would be 592 possible outliers of which the 75% have 67 years of age or less, with a maximum of 96 has has been said before.
+
+Finally let's plot the distribution of the variable again after adding the missing values.
+```{r}
+ggplot(insurance, aes(x = driver_age)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("age") +
+  ggtitle("Distribution of driver's agea after adding more missing values.")
+
+quantile(insurance$driver_age, probs = c(0.25, 0.5, 0.75, 0.99, 0.999), na.rm = T)
+```
+Now the variable counts with 8032 missing values, this is almost a 20% of the total of the rows.
+75% of the observations have an age between 41 and 15 years and the 99% of the observations has as much as 64 years of age, so we can see that the claims are very concentrated among the working age population, maybe just because the majority of them need to use the car on a daily basis.
+
+Now let's going to see if age distribution changes for each category of the variable incident severity, so we could think that maybe some age ranges (like young people) are associated with worst types of accidents or that elderly people are associated with more trivial ones, like a bump while parking.
+```{r}
+# Let's start with a loop over the categories with the function summary
+for (i in unique(insurance$incident_severity)) {
+  cat("Category: ", i, "\n")
+  print(summary(insurance$driver_age[which(insurance$incident_severity == i)]))
+}
+
+# Now let's plot the histograms for each severity category
+
+ggplot(insurance, aes(x = driver_age)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("age") +
+  ggtitle("Distribution of driver's age for each kind of incident severity") + 
+  facet_wrap(~incident_severity)
+```
+
+All age distributions look pretty similar, the only appreciable difference is that trivial damage category contains much less cases than the others, but that doesn't affect to its observed quantiles.
+
+##### **6.2 insured_rel**
+
+```{r}
+length(which(is.na(insurance$insured_rel)))
+```
+The variable has no missing observations.
+```{r}
+unique(insurance$insured_rel)
+```
+The variable is categorical without order, so let's change its type to factor.
+```{r}
+insurance$insured_rel <- factor(insurance$insured_rel)
+```
+Let's plot the variable frequencies.
+```{r}
+frequencies <- round(100*table(insurance$insured_rel)/dim(insurance)[1], 2)
+plot_frame <- data.frame(relative = names(frequencies))
+plot_frame$frequencies <- as.vector(frequencies)
+
+ggplot(data = plot_frame, aes(x = relative, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of the variable insured_rel.") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.2)
+```
+
+##### **6.3 license_issue_d**
+
+```{r}
+head(insurance$license_issue_d)
+length(which(is.na(insurance$license_issue_d)))
+```
+This variable contains 489 missing observations. Since it contains dates let's also transform its type.
+```{r}
+head(as_date(insurance$license_issue_d, format = "%d-%m-%Y"))
+```
+As can be seen in the warning message, there seems to be a problem with 12 observations that can't be converted into date properly. Let's try to find the reason for this to happen.
+```{r}
+check <- insurance$license_issue_d
+check <- sort(check)
+tail(check)
+```
+We can observe that at least two observations contain slashes as separators instead of hyphens, so let's check if there are more observations with this problem.
+```{r}
+# For simplicity let's take off the NA values in the for loop
+without_na <- which(!is.na(insurance$license_issue_d))
+problems_index <- numeric()
+for (i in 1:length(insurance$license_issue_d[without_na])) {
+  if (length(unlist(strsplit(insurance$license_issue_d[without_na][i], "-"))) == 1) {
+    problems_index <- c(problems_index, i)
+  }
+}
+
+length(problems_index)
+insurance$license_issue_d[without_na][problems_index]
+```
+Now it's clear that the problems are being caused by this twelve observations that contain slashes instead of hyphens. In adition we can see that this dates contain unexpected years, so let's replace this twelve values by NA's.
+```{r}
+# Replacing the problematic dates with NA's
+insurance$license_issue_d[without_na][problems_index] <- NA
+insurance$license_issue_d <- as_date(insurance$license_issue_d, format = "%d-%m-%Y")
+```
+Now let's continue inspecting the dates of the variable.
+```{r}
+range(insurance$license_issue_d, na.rm = T)
+```
+It seems that there still being problems with some dates, it's clear that we can't have licenses issued in the year 9740 nor the year 1900, so let's change this dates to NA as well.
+```{r}
+length(which(year(insurance$license_issue_d) == 1900))
+```
+Changing the value to missing for the observations dated in the year 1900 will add 19900 new missing observations for this variable, but we have no better option for the moment.
+```{r}
+insurance$license_issue_d[which(year(insurance$license_issue_d) == 1900)] <- NA
+insurance$license_issue_d[which(year(insurance$license_issue_d) == 9740)] <- NA
+```
+Now let's obtain the range of the dates again.
+```{r}
+range(insurance$license_issue_d, na.rm = T)
+```
+The range of the years still taking values higher than expected.
+```{r}
+max(insurance$incident_date, na.rm = T)
+```
+The highest year registered for the variable incident date was 2020, so having license issue dates after that year would be weird so it would mean that the driver hadn't have his driving license at the moment of the incident. We could argue that this is due to cause the driver was learning with that car at the moment of the incident or that he was driving without a licencse, but then it would be really extrange to make a claim to the insurance company giving them that information. In either case, let's see how many observations are posterior to 2020.
+```{r}
+length(which(year(insurance$license_issue_d) > 2020))
+```
+Only 29 observations register years after 2020.
+```{r}
+sort(insurance$license_issue_d[which(year(insurance$license_issue_d) > 2020)], decreasing = T)
+```
+Let's remember the range of the dates were the claims were made:
+```{r}
+range(insurance$claim_date, na.rm = T)
+```
+Claim dates only reach the year 2020, if the data about the driving license of the driver is registered at the claim date, it would be impossible to know the date of the driving license if it were posterior to that date even if the driver was an apprentice in the process of obtaining it or maybe the claim was modified to add new information. Since only 29 observations have this issue let's just put their license dates as missing values.
+```{r}
+insurance$license_issue_d[which(year(insurance$license_issue_d) > 2020)] <- NA
+range(insurance$license_issue_d, na.rm = T)
+```
+The new range for the variable goes as far as the 24th of october of 2020.
+Now that the variable seems to be cleaner, let's continue analyzing it a little more.
+```{r}
+frequencies <- sort(table(year(insurance$license_issue_d)))
+plot_frame <- data.frame(year = names(frequencies))
+plot_frame$frequency <- as.vector(frequencies)
+plot_frame$year <- as.numeric(plot_frame$year)
+
+ggplot(data = plot_frame[order(plot_frame$year), ], aes(x = year, y = frequency)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("License issued by year") + coord_flip()
+
+summary(year(insurance$license_issue_d))
+```
+We can see that now the 50% of the licences were issued between 2006 and 2014. The oldest one is from 1957 and the newest from 2020.
+The variable now has 20431 missing values, that's slightly more than the 50% of the rows.
+
+The majority or all of the license issue dates should be older than the incident dates, let's check it.
+```{r}
+check_frame <- insurance[, c("incident_date", "license_issue_d")]
+check_frame$diff_dates <- check_frame$incident_date - check_frame$license_issue_d
+
+ggplot(check_frame, aes(x = as.numeric(diff_dates))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between incident and license issue dates")
+```
+
+As can be seen in the plot, the variable takes some negative values, which would mean that some incidents were registered before the license was issued, let's explore a bit more this observations.
+```{r}
+length(which(check_frame$diff_dates < 0))
+```
+There are 31 observations that take negative differences.
+```{r}
+summary(check_frame$diff_dates[which(check_frame$diff_dates < 0)])
+```
+The maximum difference of days between the incident date and the license issue date is of 1688, this corresponds to more than 4 and a half years. The minimum registered is of 28 days.
+Having negative differences would mean that we have information for those claims added after the original claim, this could be rationalized as a situation where the car's driver didn't had a driver's license at the momment of the incident but time after he became a client of the insurance company. For simplifying things and without additional information of the origin of the data, let's just put these values as missing.
+```{r}
+# Adding the new variable to the dataset
+insurance$diff_li_days <- insurance$incident_date - insurance$license_issue_d
+# Removing the negative values
+insurance$diff_li_days[which(insurance$diff_li_days < 0)] <- NA
+
+ggplot(insurance, aes(x = as.numeric(diff_li_days))) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Days of difference between incident and license issue dates")
+
+summary(insurance$diff_li_days)
+```
+
+So as can be seen, now the new variable takes all of its observations as positive or zero. The minimum of days between the license issue and the incident dates is of zero days and the maximum is of 22584 days, which corresponds approximately to 62 years of difference. Half of the observations have a difference has much as of 2276 days, which corresponds to almost 6 years of difference. The other half have 6 years of difference or more.
+
+#### **7 claim_amount**
+
+Again we have a variable that contains others, so let's add them to the original dataset.
+```{r}
+insurance$claim_amount_total <- insurance$claim_amount$total
+insurance$claim_amount_injury <- insurance$claim_amount$injury
+insurance$claim_amount_property <- insurance$claim_amount$property
+insurance$claim_amount_vehicle <- insurance$claim_amount$vehicle
+```
+
+##### **7.1 license_issue_d**
+
+```{r}
+ggplot(insurance, aes(x = claim_amount_total)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable claim amount total.")
+
+summary(insurance$claim_amount_total)
+```
+We can see that the variable has a bimodal distribution histogram. It seems to have two distinct areas of concentration of observations. At the left, are the ones with a median value arround 5000\$, and at the right the ones with a median arround 60000\$. Meanwhile looking at the whole distribution the median is situated at 57970\$. The maximum value registered for this variable is of 114920\$ and the minimum of 100\$.
+
+```{r}
+ggplot(insurance, aes(x = claim_amount_injury)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable claim amount injury.")
+
+summary(insurance$claim_amount_injury)
+```
+Again the distribution looks bimodal, with a maximum of 21450\$ and a minimum of 0, this means that there are observations that don't take any amount for this concept but they do for others if we remember that the minimum of the previous variable was of 100\$.
+
+```{r}
+ggplot(insurance, aes(x = claim_amount_property)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable claim amount property.")
+
+summary(insurance$claim_amount_property)
+```
+
+This distribution also looks bimodal. Here the maximum registered is of 23670\$ and the minimum is again of 0, so there are also observations that don't account any quantity for this variable but they do for some of the others.
+
+```{r}
+ggplot(insurance, aes(x = claim_amount_vehicle)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable claim amount vehicle.")
+
+summary(insurance$claim_amount_vehicle)
+```
+The last of the claim amount related variables also has a bimodal distribution. Now the maxium obtained is of 79560\$ and the minimum is of 70\$, so this variable registers the highest claim amounts of the three that compound the total claim amount. Also, this variable don't take the minimum of zero, so has it's logical, there is no claim without damage to the car reported.
+
+Lastly, let's check if claim_amount_total is the sum of the other three variables for every observation.
+```{r}
+check_total <- logical(dim(insurance)[1])
+
+for (i in 1:dim(insurance)[1]) {
+  if (insurance$claim_amount_total[i] == sum(insurance[i, 46:48])) {
+    check_total[i] <- TRUE
+  } else {
+    check_total[i] <- FALSE
+  }
+}
+
+sum(check_total) == length(insurance$claim_amount_total)
+```
+The sum is equal to the amount in total for all the observations, so the information in the variables is coherent.
+
+#### **8 number_of_witnesses**
+
+```{r}
+length(which(is.na(insurance$number_of_witnesses)))
+unique(insurance$number_of_witnesses)
+```
+The variable only takes the values 0, 1, 2 and 3 and don't have any missing value.
+
+```{r}
+plot_frame <- data.frame(witnesses = sort(unique(insurance$number_of_witnesses)))
+plot_frame$frequencies <- round(100*as.vector(unname(table(insurance$number_of_witnesses)))/length(insurance$number_of_witnesses), 2)
+
+ggplot(data = plot_frame, aes(x = witnesses, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative requencies of witnesses") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.2)
+```
+
+The number of witnesses that is observed the most is 1, the other three observed values appear in almost a similar percentage of observations, near the 25% of them.
+
+#### **9 suspicious_activity**
+
+This would be our target variable, it registers if the claim is suspicious and so it should be proposed for more exhaustive inspection.
+
+```{r}
+length(which(is.na(insurance$suspicious_activity)))
+```
+It has no missing values.
+
+```{r}
+plot_frame <- data.frame(suspicious = sort(unique(insurance$suspicious_activity)))
+plot_frame$frequencies <- round(100*as.vector(unname(table(insurance$suspicious_activity)))/length(insurance$suspicious_activity), 2)
+
+ggplot(data = plot_frame, aes(x = suspicious, y = frequencies)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Relative requencies of suspicious activity") +
+  geom_text(aes(label = scales::percent(frequencies, scale = 1)), vjust = 1.2)
+```
+
+It looks imbalanced, so the positive category only takes the 24% of the observations.
+Let's change its values to 0 for FALSE and 1 for TRUE and put it as a factor.
+```{r}
+insurance$suspicious_activity <- replace(insurance$suspicious_activity, which(insurance$suspicious_activity == TRUE), 1)
+insurance$suspicious_activity <- factor(insurance$suspicious_activity)
+```
+#### **10 months_as_customer**
+
+```{r}
+length(which(is.na(insurance$months_as_customer)))
+```
+This variable does not contain NA values.
+```{r}
+range(insurance$months_as_customer)
+```
+It take values between 0 and 479, which would correspond to almost 40 years as customer.
+```{r}
+ggplot(insurance, aes(x = months_as_customer)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Histogram of the variable months as customer.")
+
+summary(insurance$months_as_customer)
+```
+The 50% of the observations have been as customer between 116 and 277 months, which would correspond to a range between 17 and 23 years as a customer. 
+For this observation to be correct, when summed, its months should result in a number of years inferior to the one registered in the variable driver_age, let's check it.
+```{r}
+# Since there were observations with NA's in the variable driver_age let's not select them
+check_frame <- insurance[which(!is.na(insurance$driver_age)), c("driver_age", "months_as_customer")]
+
+check_frame$years_as_customer <- check_frame$months_as_customer/12
+check_frame$check_less <- rep(0L, dim(check_frame)[1])
+# Now let's do the loop
+for (i in 1:length(check_frame$driver_age)) {
+  if (check_frame$years_as_customer[i] < check_frame$driver_age[i]) {
+    check_frame$check_less[i] <- 1L
+  }
+}
+
+dim(check_frame)[1] - sum(check_frame$check_less)
+head(check_frame)
+```
+2990 observations don't conform with this requirement, for example, the observation number six would have an age of 24 years while being with the company by more than 28 years, which is impossible, so it seems pretty straightforward that this observations should be classified as NA's. Also in the United States the minimum age for having a driving license is of 16 years, so if we rest months as customer from the driver's age it should result at least in an age of 16 years. Let's also check this.
+```{r}
+# Let's select a new frame among the observations that accounted for the previous requirement
+check_frame2 <- check_frame[which(check_frame$check_less == 1), ]
+check_frame2$check16 <- rep(0L, dim(check_frame2)[1])
+
+for (i in 1:dim(check_frame2)[1]) {
+  if ((check_frame2$driver_age[i] - check_frame2$years_as_customer[i]) >= 16) {
+    check_frame2$check16[i] <- 1L
+  }
+}
+
+sum(check_frame2$check16)
+```
+Only 18001 observations meet the requirement, so let's put all the others as NA's. It could be the case that it's the information contained in the driver_age variable the one that is wrong, but without any more information let's just assume that the problem is in this one.
+```{r}
+# For not deleting the original column, let's create another one.
+insurance$months_cust2 <- insurance$months_as_customer
+# Auxiliar dataframe for obtaining the indexes of the observations that are going to be changed
+# to NA. (check_frame is not valid because it not includes the observartions that were
+# previously classified as NA).
+index_frame <- insurance[, c("driver_age", "months_as_customer")]
+index_frame$years_as_customer <- index_frame$months_as_customer/12
+index_frame$check <- numeric(dim(index_frame)[1])
+# If the difference between the driver's age and the years_as_customer variable is bigger or 
+# equal than 16 the check value takes the value 1 and 0 otherwise.
+for (i in which(!is.na(index_frame$driver_age))) {
+  if ((index_frame$driver_age[i] - index_frame$years_as_customer[i]) >= 16) {
+    index_frame$check[i] <- 1
+  }
+}
+
+insurance$months_cust2[which(index_frame$check == 0)] <- NA
+length(which(is.na(insurance$months_cust2)))
+```
+Now the variable that we are going to use in sustitution of months_as_customer contains 22411 NA's, this is the 55% of the total number of observations.
+Lastly, let's compare the distribution of both variables.
+```{r}
+summary(insurance$months_as_customer)
+summary(insurance$months_cust2)
+
+plot_frame <- data.frame(months = c(insurance$months_as_customer, insurance$months_cust2))
+plot_frame$var <- c(rep(times = 40412, "months_as_customer"), rep(times = 40412, "months_cust2"))
+
+ggplot(plot_frame, aes(x = months)) +
+  geom_histogram(color="darkblue", fill="lightblue") + xlab("days") +
+  ggtitle("Distribution of months_as_customer and months_cust2.")  +
+  facet_wrap(~var)
+```
+
+#### **11 CUST_ID**
+
+```{r}
+head(insurance$CUST_ID)
+length(unique(insurance$CUST_ID))
+head(sort(table(insurance$CUST_ID), decreasing = T))
+```
+It's hard to know with certanity what this variable contains, if they were customer id's, it would result in the variable containing a customer with 16708 observations, which seems a pretty high number if not for a large car renting company for example. Without more  information let's just forget about this variable for the rest of the project.
+
+#### **12 POLICYTYPE**
+
+```{r}
+head(insurance$POLICYTYPE)
+length(which(is.na(insurance$POLICYTYPE)))
+unique(insurance$POLICYTYPE)
+```
+The variable only has two types of policies, third party and comprehensive. This variable doesn't have any missing value. Let's see how the variable is distributed among both categories.
+```{r}
+freqs <- round(100*table(insurance$POLICYTYPE)/length(insurance$POLICYTYPE), 2)
+plot_frame <- data.frame(type = names(freqs))
+plot_frame$frequency <- as.vector(freqs)
+
+bar_labels <- as.vector(as.character(freqs))
+bar_labels <- paste(bar_labels, "%", sep = "")
+
+ggplot(data = plot_frame, aes(x = type, y = frequency)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Policy type frequencies") + geom_text(aes(label = bar_labels), vjust = 1.3)
+```
+
+Finally since it's a categorical variable, let's change its type to factor.
+```{r}
+insurance$POLICYTYPE <- as.factor(insurance$POLICYTYPE)
+```
+
+#### **13 POL_ISSUE_DATE**
+
+```{r}
+head(insurance$POL_ISSUE_DATE)
+length(which(is.na(insurance$POL_ISSUE_DATE)))
+```
+The variable does not contain any NA's and contain dates so let's change its type.
+```{r}
+insurance$POL_ISSUE_DATE <- as_date(insurance$POL_ISSUE_DATE, format  = "%d-%m-%Y")
+```
+Now let's observe the frequencies of the years in which the policies were issued.
+```{r}
+plot_frame <- data.frame(year = unique(year(insurance$POL_ISSUE_DATE)))
+plot_frame$frequency <- as.vector(round(100*table(year(insurance$POL_ISSUE_DATE))/length(insurance$POL_ISSUE_DATE), 2))
+
+bar_labels <- paste(as.character(plot_frame$frequency), "%", sep = "")
+
+ggplot(data = plot_frame, aes(x = year, y = frequency)) +
+  geom_bar(stat="identity", color = "blue", fill = "white") +
+  ggtitle("Frequencies of the policy issue years") + geom_text(aes(label = bar_labels), vjust = 1.3)
+```
+
+The years that register more dates are 2015 and 2016 which altogether accumulate the 69.28% of the observations.
+
