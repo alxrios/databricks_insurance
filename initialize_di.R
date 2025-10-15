@@ -128,3 +128,91 @@ insurance$POLICYTYPE <- as.factor(insurance$POLICYTYPE)
 
 # POLICY_ISSUE_DATE to date (lubridate)
 insurance$POL_ISSUE_DATE <- as_date(insurance$POL_ISSUE_DATE, format  = "%d-%m-%Y")
+
+# POLICY_EFF_DATE to date (lubridate)
+insurance$POL_EFF_DATE <- as_date(insurance$POL_EFF_DATE, format = "%d-%m-%Y")
+
+# POL_EXPIRY_DATE to date (lubridate)
+insurance$POL_EXPIRY_DATE <- as_date(insurance$POL_EXPIRY_DATE, format = "%d-%m-%Y")
+
+# Preparation of check_frame
+check_frame <- data.frame(issue = insurance$POL_ISSUE_DATE, effective = insurance$POL_EFF_DATE, 
+                          expiry = insurance$POL_EXPIRY_DATE, 
+                          check_isexp = numeric(dim(insurance)[1]),
+                          check_effexp = numeric(dim(insurance)[1]))
+
+for (i in 1:dim(check_frame)[1]) {
+  if ((check_frame$expiry[i] - check_frame$issue[i]) >= 0) {
+    check_frame$check_isexp[i] <- 1
+  }
+  if ((check_frame$expiry[i] - check_frame$effective[i]) >= 0) {
+    check_frame$check_effexp[i] <- 1
+  }
+}
+
+
+check_frame$check_iseff <- numeric(dim(check_frame)[1])
+for (i in 1:dim(check_frame)[1]) {
+  if ((check_frame$effective[i] - check_frame$issue[i]) >= 0) {
+    check_frame$check_iseff[i] <- 1
+  }
+}
+
+
+check_frame$check_same <- numeric(dim(check_frame)[1])
+
+for (i in which(check_frame$check_isexp == 0)) {
+  if (check_frame$check_isexp[i] == check_frame$check_iseff[i]) {
+    check_frame$check_same[i] <- 1
+  }
+}
+
+check_frame$incident_date <- insurance$incident_date
+# Incident's date should be older than the issue date, because if the incident were before
+# the policy was issued, the incident would be no business of the insurance company.
+check_frame$iniss <- numeric(dim(check_frame)[1])
+# The ones that are NA in incident date will be also NA
+check_frame$iniss[which(is.na(check_frame$incident_date))] <- NA
+for (i in which(!is.na(check_frame$incident_date))) {
+  if ((check_frame$incident_date[i] - check_frame$issue[i]) >= 0) {
+    check_frame$iniss[i] <- 1
+  }
+}
+
+
+check_frame$effin <- numeric(dim(check_frame)[1])
+# All the observations with NA in the variable incident_date would have one for this variable
+check_frame$effin[which(is.na(check_frame$incident_date))] <- NA
+for (i in which(!is.na(check_frame$incident_date))) {
+  if ((check_frame$incident_date[i] - check_frame$effective[i]) >= 0) {
+    check_frame$effin[i] <- 1
+  }
+}
+
+
+check_frame$expin <- numeric(dim(check_frame)[1])
+# After calculation, the observations with a NA in incident_date also would have it in this
+# new variable.
+check_frame$expin[which(is.na(check_frame$incident_date))] <- NA
+for (i in which(!is.na(check_frame$incident_date))) {
+  if ((check_frame$expiry[i] - check_frame$incident_date[i]) >= 0) {
+    check_frame$expin[i] <- 1
+  }
+}
+
+insurance$diff_inci_issue <- insurance$incident_date - insurance$POL_ISSUE_DATE
+insurance$diff_inci_expiry <- insurance$incident_date - insurance$POL_EXPIRY_DATE
+insurance$diff_inci_effective <- insurance$incident_date - insurance$POL_EFF_DATE
+
+selection_index <- numeric(0)
+# na_index <- numeric(0)
+for (i in which(!is.na(insurance$incident_date))) {
+  if (sum(check_frame[i, c("check_isexp", "check_effexp", "check_iseff", "iniss")]) != 4) {
+    selection_index <- c(selection_index, i)
+    # } else {
+    #   na_index <- c(na_index, i)
+    # }
+  }
+}
+
+insurance[selection_index, c("diff_inci_issue", "diff_inci_expiry", "diff_inci_effective")] <- NA
